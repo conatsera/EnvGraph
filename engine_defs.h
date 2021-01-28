@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <vulkan/vulkan.hpp>
+#include <glm/vec3.hpp>
 
 namespace Engine {
 
@@ -41,11 +42,37 @@ typedef struct _ImageBarrierResource : public MemoryBarrierResource {
         m_imageSubresourceRange(imageSubresourceRange) {}
 } ImageBarrierResource;
 
+typedef struct EngineBuffer
+{
+    vk::Buffer buffer;
+    vk::DeviceMemory devMem;
+} EngineBuffer_t;
+
+enum class EngineTextureType : uint8_t {
+  SOLID_COLOR,
+  GRADIENT,
+  IMAGE
+};
+
+typedef struct {
+  glm::vec2 u;
+  glm::vec2 v;
+} EngineTextureCoords;
+
+typedef struct EngineTexture {
+  EngineTextureType type;
+  glm::vec3 colorA;
+  glm::vec3 colorB;
+  vk::Image image;
+
+  EngineTextureCoords coords;
+} EngineTexture_t;
+
 
 typedef uint32_t DescriptorSetID;
 
 constexpr const DescriptorSetID INVALID_DESCRIPTOR_SET_ID = UINT32_MAX;
 
-} // namespace Engine
+}  // namespace Engine
 
 #endif

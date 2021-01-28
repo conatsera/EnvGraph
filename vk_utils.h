@@ -4,8 +4,12 @@
 
 #include <vulkan/vulkan.hpp>
 
-namespace Engine {
+constexpr const uint64_t kFenceTimeout = 100000000;
 
+constexpr const uint32_t kDefaultWidth = 1536;
+constexpr const uint32_t kDefaultHeight = 768;
+
+namespace Engine {
 
 template <typename TargetType, typename SourceType>
 VULKAN_HPP_INLINE TargetType checked_cast(SourceType value) {
@@ -29,16 +33,7 @@ vk::UniqueInstance createInstance(
 vk::UniqueDebugUtilsMessengerEXT createDebugUtilsMessenger(
     vk::UniqueInstance& instance);
 
-const constexpr vk::ImageCreateInfo depthStencilImageCreateInfo{
-    vk::ImageCreateFlags(),
-    vk::ImageType::e2D,
-    vk::Format::eD16Unorm,
-    vk::Extent3D{1440, 1600, 1},
-    1,
-    1,
-    vk::SampleCountFlagBits::e1,
-    vk::ImageTiling::eOptimal,
-    vk::ImageUsageFlagBits::eDepthStencilAttachment};
+constexpr const vk::Format kDepthFormat = vk::Format::eD16Unorm;
 
 }  // namespace Engine
 

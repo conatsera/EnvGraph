@@ -1,0 +1,28 @@
+#version 450
+layout (local_size_x = 256, local_size_y = 32) in;
+layout (std140, binding = 0) uniform readonly fftConfig
+{
+    uint fftBinCount;
+    uint fftSampleCount;
+} config;
+layout (std140, binding = 1) buffer readonly fftInput
+{
+    vec2 nextFFTComplex[];
+} inputBuff;
+layout (std430, binding = 2) buffer fftOutput
+{
+    float fftMagnitudes[];
+} outputBuff;
+
+void main() {
+    const float strength =
+                sqrt((inputBuff.nextFFTComplex[gl_LocalInvocationIndex].x * inputBuff.nextFFTComplex[gl_LocalInvocationIndex].x)
+                   + (inputBuff.nextFFTComplex[gl_LocalInvocationIndex].y * inputBuff.nextFFTComplex[gl_LocalInvocationIndex].y));
+
+    for (uint i = 0; i < config.fftSampleCount - 1; i++)
+    {
+        outputBuff.fftMagnitudes[((i + 1) * config.fftBinCount) + gl_LocalInvocationIndex] = outputBuff.fftMagnitudes[(i * config.fftBinCount) + gl_LocalInvocationIndex];
+    }
+    
+    outputBuff.fftMagnitudes[gl_LocalInvocationIndex] = strength;
+}

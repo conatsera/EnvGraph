@@ -1,8 +1,7 @@
-#include "engine.h"
-
 #include <iostream>
 #include <set>
 
+#include "engine.h"
 
 #if (VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1)
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
@@ -69,8 +68,7 @@ vk::UniqueInstance createInstance(std::string const& appName,
   }
 #endif
 
-  for (auto& layer: enabledLayers)
-    std::cout << layer;
+  for (auto& layer : enabledLayers) std::cout << layer;
 
   // create a UniqueInstance
   vk::ApplicationInfo applicationInfo(appName.c_str(), 1, engineName.c_str(), 1,
@@ -169,8 +167,8 @@ inline bool isPhyDevSuitable(vk::PhysicalDevice phyDev, vk::SurfaceKHR surface,
          deviceSupportsExts && swapchainSupported;
 }
 
-uint32_t Engine::GetMemoryType(
-    uint32_t typeBits, vk::MemoryPropertyFlags requirements_mask) {
+uint32_t Engine::GetMemoryType(uint32_t typeBits,
+                               vk::MemoryPropertyFlags requirements_mask) {
   // Search memtypes to find first index with those properties
   for (uint32_t i = 0; i < m_phyDevMemProps.memoryTypeCount; i++) {
     if ((typeBits & 1) == 1) {
@@ -186,8 +184,7 @@ uint32_t Engine::GetMemoryType(
   return false;
 }
 
-void Engine::InitVulkan(
-    std::vector<std::string> const& extraExtensions) {
+void Engine::InitVulkan(std::vector<std::string> const& extraExtensions) {
 #ifndef NDEBUG
   SetupDebugMessenger();
 #endif
@@ -233,6 +230,7 @@ void Engine::SetupDevice() {
   CreateSwapChain();
   CreateImageViews();
   CreateDepthStencil();
+  CreateCommandPools();
 }
 
 void Engine::ChooseSwapSurfaceFormat() {
@@ -250,7 +248,7 @@ void Engine::ChooseSwapExtent() {
   if (caps.currentExtent.width != UINT32_MAX)
     m_extent = caps.currentExtent;
   else {
-    vk::Extent2D actualExtent = {1440, 1600};
+    vk::Extent2D actualExtent = {m_windowExtents.width, m_windowExtents.height};
 
     actualExtent.width =
         std::max(caps.minImageExtent.width,
@@ -264,8 +262,10 @@ void Engine::ChooseSwapExtent() {
 }
 
 void Engine::CreateSwapChain() {
+  querySwapchainSupport(m_phyDev, m_surface, m_swapchainSupportDetails);
+
   ChooseSwapSurfaceFormat();
-  vk::PresentModeKHR presentMode = vk::PresentModeKHR::eFifoRelaxed;
+  vk::PresentModeKHR presentMode = vk::PresentModeKHR::eImmediate;
   ChooseSwapExtent();
 
   uint32_t imageCount =
@@ -277,10 +277,7 @@ void Engine::CreateSwapChain() {
   vk::SwapchainCreateInfoKHR swapchainCreateInfo(
       vk::SwapchainCreateFlagsKHR(), m_surface, imageCount,
       m_swapchainFormat.format, m_swapchainFormat.colorSpace, m_extent,
-      1,  // TODO: 1 image layer with two distortions or 2 image layers with 1
-          // distoration each For most WMR headsets it's 1, but could the O+
-          // do better with two images? Will be 1 for now as the glfw test
-          // surface has just one maximum
+      1,
       vk::ImageUsageFlagBits::eColorAttachment);
 
   uint32_t queueFamilyIndices[] = {m_graphicsQueueFamilyIndex,
@@ -304,26 +301,34 @@ void Engine::CreateSwapChain() {
   swapchainCreateInfo.presentMode = presentMode;
   swapchainCreateInfo.clipped = VK_TRUE;
 
-  swapchainCreateInfo.oldSwapchain = nullptr;
+  swapchainCreateInfo.oldSwapchain = m_swapchain;
 
   m_swapchain = m_device->createSwapchainKHR(swapchainCreateInfo);
 
-  m_swapchainImages = m_device->getSwapchainImagesKHR(m_swapchain);
+  m_swapchainImages.clear();
+  auto swapchainImages = m_device->getSwapchainImagesKHR(m_swapchain);
+  for (auto swapchainImage : swapchainImages)
+    m_swapchainImages.push_back(SwapchainImage_t{swapchainImage});
+
+  m_framebufferCount = m_swapchainImages.size();
+
+  m_framebuffers = std::vector<vk::Framebuffer>(m_framebufferCount);
 }
 
 void Engine::CreateImageViews() {
   m_imageViews.resize(m_swapchainImages.size());
 
-  for (const auto& swapchainImage : m_swapchainImages) {
+  for (auto& swapchainImage : m_swapchainImages) {
     vk::ImageViewCreateInfo imageViewCreateInfo(
-        vk::ImageViewCreateFlags(), swapchainImage, vk::ImageViewType::e2D,
+        vk::ImageViewCreateFlags(), swapchainImage.image, vk::ImageViewType::e2D,
         m_swapchainFormat.format,
         vk::ComponentMapping(/*r*/ vk::ComponentSwizzle::eIdentity,
                              /*g*/ vk::ComponentSwizzle::eIdentity,
                              /*b*/ vk::ComponentSwizzle::eIdentity,
                              /*a*/ vk::ComponentSwizzle::eIdentity),
         vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
-    m_device->createImageView(imageViewCreateInfo);
+    swapchainImage.view = m_device->createImageView(imageViewCreateInfo);
+    m_imageViews.push_back(swapchainImage.view);
   }
 }
 
@@ -362,18 +367,18 @@ void Engine::CreateQueues() {
       (float*)malloc(sizeof(float) * m_graphicsQueuesMax);
 
   graphicsQueuePriorities[0] = controlQueuePriority;
-  for (int i = 1; i < m_graphicsQueuesAvailable; i++)
+  for (uint32_t i = 1; i < m_graphicsQueuesAvailable; i++)
     graphicsQueuePriorities[i] = otherQueuePriority;
 
-      vk::DeviceQueueCreateInfo graphicsQueueCreateInfo(
-          vk::DeviceQueueCreateFlags(), m_graphicsQueueFamilyIndex,
+  vk::DeviceQueueCreateInfo graphicsQueueCreateInfo(
+      vk::DeviceQueueCreateFlags(), m_graphicsQueueFamilyIndex,
       m_graphicsQueuesAvailable, graphicsQueuePriorities);
   queueCreateInfos.push_back(graphicsQueueCreateInfo);
 
   float* computeQueuePriorities =
       (float*)malloc(sizeof(float) * m_computeQueuesAvailable);
 
-  for (int i = 0; i < m_computeQueuesAvailable; i++)
+  for (uint32_t i = 0; i < m_computeQueuesAvailable; i++)
     computeQueuePriorities[i] = 1.0F;
 
   vk::DeviceQueueCreateInfo computeQueueCreateInfo(
@@ -390,9 +395,9 @@ void Engine::CreateQueues() {
     queueCreateInfos.push_back(presentQueueCreateInfo);
   }
 
-  vk::PhysicalDeviceFeatures requestedFeatures = {};
+  /*vk::PhysicalDeviceFeatures requestedFeatures = {};
   requestedFeatures.geometryShader = VK_TRUE;
-  requestedFeatures.multiViewport = VK_TRUE;
+  requestedFeatures.multiViewport = VK_TRUE;*/
 
   vk::DeviceCreateInfo deviceCreateInfo(vk::DeviceCreateFlags(),
                                         queueCreateInfos.size(),
@@ -402,11 +407,10 @@ void Engine::CreateQueues() {
   deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
   m_device = m_phyDev.createDeviceUnique(deviceCreateInfo);
-  // m_graphicsQueue = m_device.get().getQueue(m_graphicsQueueFamilyIndex, 0);
-  // m_computeQueue = m_device.get().getQueue(m_computeQueueFamilyIndex, 0);
+  m_graphicsQueue = m_device.get().getQueue(m_graphicsQueueFamilyIndex, 0);
+  m_computeQueue = m_device.get().getQueue(m_computeQueueFamilyIndex, 0);
 
-  if (m_presentQueueFamilyIndex != m_computeQueueFamilyIndex)
-    m_presentQueue = m_device.get().getQueue(m_presentQueueFamilyIndex, 0);
+  m_presentQueue = m_device.get().getQueue(m_presentQueueFamilyIndex, 0);
 }
 // TODO: Move to EnginePipeline
 void Engine::CreateCommandPools() {
@@ -415,20 +419,37 @@ void Engine::CreateCommandPools() {
   vk::CommandPoolCreateInfo computeCmdPoolCreateInfo(
       vk::CommandPoolCreateFlags(), m_computeQueueFamilyIndex);
 
-  // m_graphicsCommandPool =
-  //    m_device.get().createCommandPool(graphicsCmdPoolCreateInfo);
-  // m_computeCommandPool =
-  //    m_device.get().createCommandPool(computeCmdPoolCreateInfo);
+  m_graphicsCommandPool =
+      m_device.get().createCommandPool(graphicsCmdPoolCreateInfo);
+  m_computeCommandPool =
+      m_device.get().createCommandPool(computeCmdPoolCreateInfo);
 
-  if (m_presentQueueFamilyIndex != m_computeQueueFamilyIndex) {
+  
     vk::CommandPoolCreateInfo presentCmdPoolCreateInfo(
         vk::CommandPoolCreateFlags(), m_presentQueueFamilyIndex);
     m_presentCommandPool =
         m_device.get().createCommandPool(presentCmdPoolCreateInfo);
-  }
+  
 }
-// TODO: Move to ControlEnginePipeline
+
+/*
+void Engine::QueueCommandBuffer(vk::UniqueSemaphore& imageAcqSemaphore) {
+  
+}
+*/
 void Engine::CreateDepthStencil() {
+
+  vk::ImageCreateInfo depthStencilImageCreateInfo{
+    vk::ImageCreateFlags(),
+    vk::ImageType::e2D,
+    kDepthFormat,
+    vk::Extent3D{m_windowExtents.width, m_windowExtents.height, 1},
+    1,
+    1,
+    vk::SampleCountFlagBits::e1,
+    vk::ImageTiling::eOptimal,
+    vk::ImageUsageFlagBits::eDepthStencilAttachment};
+
   m_depthImage = m_device->createImage(depthStencilImageCreateInfo);
 
   vk::MemoryRequirements memReqs =
@@ -448,7 +469,7 @@ void Engine::CreateDepthStencil() {
       vk::ImageViewCreateFlags{},
       m_depthImage,
       vk::ImageViewType::e2D,
-      depthStencilImageCreateInfo.format,
+      kDepthFormat,
       vk::ComponentMapping{vk::ComponentSwizzle::eR, vk::ComponentSwizzle::eG,
                            vk::ComponentSwizzle::eB, vk::ComponentSwizzle::eA},
       vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1}};
@@ -456,4 +477,4 @@ void Engine::CreateDepthStencil() {
   m_depthImageView = m_device->createImageView(newImageViewCreateInfo);
 }
 
-} // namespace Engine
+}  // namespace Engine
