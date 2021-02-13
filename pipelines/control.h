@@ -53,8 +53,6 @@ class ControlEnginePipeline : public EnginePipeline<1, 1, 1, 1, 1, 0>
   private:
     glm::highp_mat4 m_mvp;
 
-    std::vector<vk::PipelineShaderStageCreateInfo> m_shaderStages;
-
     vk::UniqueShaderModule m_controlVertShaderModule;
     vk::UniqueShaderModule m_controlFragShaderModule;
 

@@ -2,12 +2,12 @@
 #ifndef ENGINE_PIPELINES_H
 #define ENGINE_PIPELINES_H
 
+#include <chrono>
 #include <cinttypes>
 #include <iostream>
 #include <map>
-#include <vector>
 #include <thread>
-#include <chrono>
+#include <vector>
 
 #include <vulkan/vulkan.hpp>
 
@@ -74,7 +74,7 @@ class EnginePipelineBase
 
     virtual void Render(const vk::Device &device, const vk::CommandBuffer &cmdBuffer, vk::Extent2D windowExtents){};
 
-    virtual void Resized(vk::Extent2D windowExtents) {};
+    virtual void Resized(vk::Extent2D windowExtents){};
 
     virtual void Compute(const vk::Device &device, const vk::CommandBuffer &cmdBuffer){};
 
@@ -167,16 +167,20 @@ class EnginePipeline : public EnginePipelineBase,
         return QueueRequirements{graphics_queue_count, compute_queue_count};
     }
 
-    void PauseRender() {
+    void PauseRender()
+    {
         m_pauseSignal = true;
         while (m_paused == false)
             std::this_thread::sleep_for(std::chrono::milliseconds(25));
     }
-    const bool IsPaused() const { return m_paused; };
+    const bool IsPaused() const
+    {
+        return m_paused;
+    };
 
   protected:
     bool m_pauseSignal;
-    bool m_paused;    
+    bool m_paused;
 
   protected:
     void CleanupEnginePipeline(const vk::UniqueDevice &device) override
@@ -185,7 +189,7 @@ class EnginePipeline : public EnginePipelineBase,
             device->destroyDescriptorSetLayout(descriptorSetLayout);
 
         device->destroyDescriptorPool(m_descriptorPool);
-        
+
         for (const auto &samplerDesc : m_samplerDescriptors)
             device->destroySampler(samplerDesc.sampler);
 
@@ -251,8 +255,8 @@ class EnginePipeline : public EnginePipelineBase,
 
     vk::ImageView CreateNewImage(const vk::UniqueDevice &device, ImageID_t imageID, uint32_t bindingLocation,
                                  std::vector<DescriptorSetID> descSetIDs, vk::ImageCreateInfo &newImageCreateInfo,
-                                 vk::ImageSubresourceRange newImageSubresourceRange, vk::Sampler imageSampler,
-                                 vk::ImageLayout finalLayout)
+                                 vk::ImageSubresourceRange newImageSubresourceRange, vk::ImageLayout finalLayout,
+                                 vk::Sampler imageSampler)
     {
         vk::Image newImage = device->createImage(newImageCreateInfo);
 
@@ -304,11 +308,14 @@ class EnginePipeline : public EnginePipelineBase,
         {
             for (const auto &descSetID : descSetIDs)
             {
-                DescriptorInfo_t imageDescInfo{vk::DescriptorType::eCombinedImageSampler,
-                                               bindingLocation,
-                                               {},
-                                               vk::DescriptorImageInfo{imageSampler, newImageView, finalLayout}};
-                m_descriptorSetObjects[descSetID][imageID + buffer_count] = imageDescInfo;
+                vk::DescriptorType type;
+                if (imageSampler)
+                    type = vk::DescriptorType::eCombinedImageSampler;
+                else
+                    type = vk::DescriptorType::eStorageImage;
+                DescriptorInfo_t imageDescInfo{
+                    type, bindingLocation, {}, vk::DescriptorImageInfo{imageSampler, newImageView, finalLayout}};
+                m_descriptorSetObjects[descSetID][bindingLocation] = imageDescInfo;
             }
         }
 
@@ -316,11 +323,11 @@ class EnginePipeline : public EnginePipelineBase,
     }
     vk::ImageView CreateNewImage(const vk::UniqueDevice &device, uint32_t imageID, uint32_t bindingLocation,
                                  DescriptorSetID descSetID, vk::ImageCreateInfo &newImageCreateInfo,
-                                 vk::ImageSubresourceRange newImageSubresourceRange, vk::Sampler imageSampler,
-                                 vk::ImageLayout finalLayout)
+                                 vk::ImageSubresourceRange newImageSubresourceRange, vk::ImageLayout finalLayout,
+                                 vk::Sampler imageSampler = {})
     {
         return CreateNewImage(device, imageID, bindingLocation, std::vector<DescriptorSetID>{descSetID},
-                              newImageCreateInfo, newImageSubresourceRange, imageSampler, finalLayout);
+                              newImageCreateInfo, newImageSubresourceRange, finalLayout, imageSampler);
     }
 
     EngineBuffer_t CreateNewBuffer(const vk::UniqueDevice &device, BufferID_t bufferID, uint32_t bindingLocation,
@@ -331,7 +338,7 @@ class EnginePipeline : public EnginePipelineBase,
 
         vk::MemoryRequirements memReqs = device->getBufferMemoryRequirements(newBuffer);
 
-        //auto memProps = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
+        // auto memProps = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
 
         vk::MemoryAllocateInfo newBufferMemAlloc{memReqs.size, GetMemoryType(memReqs.memoryTypeBits, memProps)};
 
@@ -340,12 +347,12 @@ class EnginePipeline : public EnginePipelineBase,
 
         if (vk::MemoryPropertyFlagBits::eHostVisible & memProps)
         {
-        auto memMapResult = device->mapMemory(newBufferDevMem, 0, VK_WHOLE_SIZE, vk::MemoryMapFlags(), hostBuffer);
+            auto memMapResult = device->mapMemory(newBufferDevMem, 0, VK_WHOLE_SIZE, vk::MemoryMapFlags(), hostBuffer);
 
-        if (memMapResult != vk::Result::eSuccess)
-        {
-            printf("device mapMemory failed: %s ", vk::to_string(memMapResult).c_str());
-        }
+            if (memMapResult != vk::Result::eSuccess)
+            {
+                printf("device mapMemory failed: %s ", vk::to_string(memMapResult).c_str());
+            }
         }
 
         m_bufferDescriptors[bufferID] = vk::DescriptorBufferInfo(newBuffer, 0, memReqs.size);
@@ -355,7 +362,7 @@ class EnginePipeline : public EnginePipelineBase,
             {
                 DescriptorInfo_t bufferDescInfo{vk::DescriptorType::eUniformBuffer, bindingLocation,
                                                 vk::DescriptorBufferInfo{newBuffer, 0, newBufferCreateInfo.size}};
-                m_descriptorSetObjects[descSetID][bufferID] = bufferDescInfo;
+                m_descriptorSetObjects[descSetID][bindingLocation] = bufferDescInfo;
             }
         }
 
@@ -369,8 +376,8 @@ class EnginePipeline : public EnginePipelineBase,
                                newBufferCreateInfo, hostBuffer, memProps, requiresBarrier);
     }
     EngineBuffer_t CreateNewBuffer(const vk::UniqueDevice &device, BufferID_t bufferID,
-                                   vk::BufferCreateInfo &newBufferCreateInfo, void **hostBuffer, vk::MemoryPropertyFlags memProps,
-                                   bool requiresBarrier = false)
+                                   vk::BufferCreateInfo &newBufferCreateInfo, void **hostBuffer,
+                                   vk::MemoryPropertyFlags memProps, bool requiresBarrier = false)
     {
         return CreateNewBuffer(device, bufferID, UINT32_MAX, std::vector<DescriptorSetID>{INVALID_DESCRIPTOR_SET_ID},
                                newBufferCreateInfo, hostBuffer, memProps, requiresBarrier);
@@ -390,7 +397,7 @@ class EnginePipeline : public EnginePipelineBase,
             {
                 DescriptorInfo_t samplerDescInfo{
                     vk::DescriptorType::eCombinedImageSampler, bindingLocation, {}, vk::DescriptorImageInfo{sampler}};
-                m_descriptorSetObjects[descSetID][samplerID + buffer_count + image_count] = samplerDescInfo;
+                m_descriptorSetObjects[descSetID][bindingLocation] = samplerDescInfo;
             }
         }
 
@@ -444,7 +451,8 @@ class EnginePipeline : public EnginePipelineBase,
                 if (descriptorSetObject.bindLoc != UINT32_MAX)
                 {
                     const vk::DescriptorImageInfo *imageInfo =
-                        (descriptorSetObject.type == vk::DescriptorType::eCombinedImageSampler)
+                        (descriptorSetObject.type == vk::DescriptorType::eCombinedImageSampler) ||
+                                (descriptorSetObject.type == vk::DescriptorType::eStorageImage)
                             ? &descriptorSetObject.image
                             : nullptr;
                     const vk::DescriptorBufferInfo *buffInfo =
@@ -477,7 +485,7 @@ class EnginePipeline : public EnginePipelineBase,
     std::array<vk::Image, image_count> m_images;
     std::vector<vk::ImageView> m_imageViews;
 
-    std::array<vk::DescriptorBufferInfo, buffer_count> m_bufferDescriptors;
+    std::array<vk::DescriptorBufferInfo, buffer_count + image_count> m_bufferDescriptors;
     std::array<vk::DescriptorImageInfo, sampler_count> m_samplerDescriptors;
 
     std::array<std::array<DescriptorInfo_t, image_count + buffer_count + sampler_count>, descriptor_set_count>
@@ -486,6 +494,7 @@ class EnginePipeline : public EnginePipelineBase,
     vk::UniquePipelineLayout m_pipelineLayout;
     vk::UniquePipelineCache m_pipelineCache;
     vk::UniquePipeline m_pipeline;
+    std::vector<vk::PipelineShaderStageCreateInfo> m_shaderStages;
 
     std::array<vk::DescriptorSetLayout, descriptor_set_count> m_descriptorSetLayouts;
     std::array<vk::PushConstantRange, push_constant_count> m_pushConstantRanges;
@@ -498,8 +507,7 @@ class EnginePipeline : public EnginePipelineBase,
     // Pipeline creation variables start
     vk::VertexInputBindingDescription vertexInputBindingDesc{0, 0, vk::VertexInputRate::eVertex};
 
-    std::vector<vk::VertexInputAttributeDescription> vertexInputAttrDesc{{0, 0, vk::Format::eR32G32B32A32Sfloat, 0},
-                                                                         {1, 0, vk::Format::eR32G32B32A32Sfloat, 16}};
+    std::vector<vk::VertexInputAttributeDescription> vertexInputAttrDesc;
 
     std::array<vk::DynamicState, 2> dynamicStateEnables{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
     vk::PipelineDynamicStateCreateInfo dynamicStateCI{vk::PipelineDynamicStateCreateFlags{}, dynamicStateEnables};

@@ -29,7 +29,7 @@ void main() {
 
     float timePos = (myBufferVals.currentTimePos - floor((gl_VertexIndex / 2) / myBufferVals.fftBins))/2;
     if (timePos <= 0)
-        timePos += 2047/2;
+        timePos += 1023/2;
 
     const float bin = mod(gl_VertexIndex, myBufferVals.fftBins*2);
 

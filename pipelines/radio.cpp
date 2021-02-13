@@ -194,7 +194,7 @@ void RadioPipeline::Setup(const vk::UniqueDevice &device, vk::PhysicalDeviceMemo
 
     m_radioRenderMode = HIGH_RESOLUTION;
 
-    m_mainRadioThread = std::thread(CalculateRadioSignal<HIGH_RESOLUTION, 4, 2048>, std::ref(m_shutdownSignal), std::ref(m_streamId), m_radioSignalData);
+    m_mainRadioThread = std::thread(CalculateRadioSignal<HIGH_RESOLUTION, 256, 1024>, std::ref(m_shutdownSignal), std::ref(m_streamId), m_radioSignalData);
 
     vertexInputBindingDesc.setStride(sizeof(float));
 
@@ -237,7 +237,7 @@ void RadioPipeline::CleanupEnginePipeline(const vk::UniqueDevice &device)
 
     fftw_cleanup();
 
-    EnginePipelineBase::CleanupEnginePipeline(device);
+    EnginePipeline::CleanupEnginePipeline(device);
 }
 
 void RadioPipeline::CreateViewModelProjection(const vk::UniqueDevice &device)
@@ -339,7 +339,7 @@ void RadioPipeline::ChangeRadioRenderMode(RadioRenderMode newMode)
     switch (m_radioRenderMode)
     {
     case (HIGH_RESOLUTION): {
-        m_mainRadioThread = std::thread(CalculateRadioSignal<HIGH_RESOLUTION, 4, 1024>, std::ref(m_shutdownSignal), std::ref(m_streamId), m_radioSignalData);
+        m_mainRadioThread = std::thread(CalculateRadioSignal<HIGH_RESOLUTION, 256, 1024>, std::ref(m_shutdownSignal), std::ref(m_streamId), m_radioSignalData);
         break;
     }
     default:

@@ -37,9 +37,9 @@ int main(int argc, char **argv)
         //return -32;
     }
 
-    double currentFrequency = 2437e6;
-    double currentGain = 0.4;
-    bool wide = false;
+    double currentFrequency = 637e6;
+    double currentGain = 0.0;
+    bool wide = true;
     lms_device_t *device = nullptr;
 
     int deviceCount = LMS_GetDeviceList(NULL);
@@ -109,6 +109,7 @@ int main(int argc, char **argv)
         int antennaCount = LMS_GetAntennaList(device, LMS_CH_RX, 0, antennaList);
         if (antennaCount < 0)
         {
+#ifdef VK_USE_PLATFORM_XCB_KHR
             std::cout << "Failed to get antenna list" << std::endl;
             LMS_Close(device);
             return -8;
@@ -128,7 +129,7 @@ int main(int argc, char **argv)
         // print antenna index and name
         std::cout << "Automatically selected antenna: " << n << ": " << antennaList[n] << std::endl;
 
-        if (LMS_SetAntenna(device, LMS_CH_RX, 0, LMS_PATH_LNAH) != 0) // manually select antenna
+        if (LMS_SetAntenna(device, LMS_CH_RX, 0, LMS_PATH_LNAW) != 0) // manually select antenna
         {
             std::cout << "Failed to set active antenna" << std::endl;
             LMS_Close(device);
@@ -146,7 +147,7 @@ int main(int argc, char **argv)
 
         // Set sample rate to 8 MHz, preferred oversampling in RF 8x
         // This set sampling rate for all channels
-        if (LMS_SetSampleRate(device, 20e6, 8) != 0)
+        if (LMS_SetSampleRate(device, 11.52e6, 8) != 0)
         {
             std::cout << "Failed to set sample rate" << std::endl;
             LMS_Close(device);
@@ -178,7 +179,7 @@ int main(int argc, char **argv)
         std::cout << "RX LPF bandwitdh range: " << range.min / 1e6 << " - " << range.max / 1e6 << " MHz\n\n";
 
         // Configure LPF, bandwidth 8 MHz
-        if (LMS_SetLPFBW(device, LMS_CH_RX, 0, 20e6) != 0)
+        if (LMS_SetLPFBW(device, LMS_CH_RX, 0, 10e6) != 0)
         {
             std::cout << "Failed to set LPF bandwidth" << std::endl;
             LMS_Close(device);

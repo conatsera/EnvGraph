@@ -1,3 +1,3 @@
-[submodule "extern/plex"]
-	path = extern/plex
-	url = https://github.com/IBM/plex
+[submodule "extern/googletest"]
+	path = extern/googletest
+	url = https://github.com/google/googletest.git

@@ -27,6 +27,11 @@ void ControlEnginePipeline::Setup(const vk::UniqueDevice &device, vk::PhysicalDe
     vertexInputBindingDesc.stride = sizeof(g_vb_solid_face_colors_Data[0]);
     vertexInfoStateCI.setVertexBindingDescriptions(vertexInputBindingDesc);
 
+    vertexInputAttrDesc = {{0, 0, vk::Format::eR32G32B32A32Sfloat, 0},
+                                                                         {1, 0, vk::Format::eR32G32B32A32Sfloat, 16}};
+
+    vertexInfoStateCI.setVertexAttributeDescriptions(vertexInputAttrDesc);    
+
     colorBlendAttachmentState.colorWriteMask = (vk::ColorComponentFlags)(0xf);
 
     vk::GraphicsPipelineCreateInfo graphicsPipelineCI{vk::PipelineCreateFlags{},
@@ -53,6 +58,8 @@ void ControlEnginePipeline::CleanupEnginePipeline(const vk::UniqueDevice &device
 {
     device->destroyShaderModule(m_controlVertShaderModule.get());
     device->destroyShaderModule(m_controlFragShaderModule.get());
+
+    EnginePipeline::CleanupEnginePipeline(device);
 }
 
 void ControlEnginePipeline::CreateViewModelProjection(const vk::UniqueDevice &device)

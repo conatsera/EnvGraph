@@ -22,7 +22,7 @@ constexpr const size_t kMaxBufferBytes = sizeof(float) * kMaxBufferSize * 2;
 constexpr const size_t kMaxSignalBufferBytes = sizeof(float) * kMaxBufferSize * 2;
 constexpr const size_t kMaxComplexBufferBytes = sizeof(fftw_complex) * kMaxBufferSize;
 
-constexpr const size_t kMaxTimeDepth = 2048;
+constexpr const size_t kMaxTimeDepth = 1024;
 
 enum RadioBufferIDs : BufferID_t
 {
@@ -133,7 +133,7 @@ class RadioPipeline : public EnginePipeline<1, 1, 3, 0, 1, 0>
 
   private:
     //size_t m_avgCount = 4;
-    size_t m_timeDepth = 2048;
+    size_t m_timeDepth = 1024;
 
     bool m_shutdownSignal = false;
     //std::mutex m_fftCalcLock;
@@ -152,8 +152,6 @@ class RadioPipeline : public EnginePipeline<1, 1, 3, 0, 1, 0>
         uint32_t currentTimePos;
     } m_settings;
     uint8_t *m_mvpBuffer = nullptr;
-
-    std::vector<vk::PipelineShaderStageCreateInfo> m_shaderStages;
 
     vk::UniqueShaderModule m_radioVertShaderModule;
     vk::UniqueShaderModule m_radioFragShaderModule;

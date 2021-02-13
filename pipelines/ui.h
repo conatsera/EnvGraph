@@ -127,8 +127,6 @@ class UIPipeline : public Pipelines::EnginePipeline<1, 1, 2, 1, 1, 0, 1>
     vk::Sampler m_fontSampler;
     vk::ImageView m_fontImageView;
 
-    std::vector<vk::PipelineShaderStageCreateInfo> m_shaderStages;
-
     vk::UniqueShaderModule m_uiVertShaderModule;
     vk::UniqueShaderModule m_uiFragShaderModule;
 

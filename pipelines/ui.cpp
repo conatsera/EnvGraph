@@ -4,10 +4,7 @@
 #include <fstream>
 #include <iostream>
 
-#include <embedder.h>
-
-#include "../ui/imstb_rectpack.h"
-#include "../ui/imstb_truetype.h"
+//#include <embedder.h>
 
 #include "../engine.h"
 #include "../engine_defs.h"
@@ -226,7 +223,7 @@ void UIPipeline::SetupFragmentFontTexture(const vk::UniqueDevice &device)
     vk::ImageLayout finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
     m_fontImageView =
-        CreateNewImage(device, kFontImage, 0, fontDescSetID, imageCI, imageSR, m_fontSampler, finalLayout);
+        CreateNewImage(device, kFontImage, 0, fontDescSetID, imageCI, imageSR, finalLayout, m_fontSampler);
 
     const size_t fontTextureBufferSize = glyphTextExtents.width * glyphTextExtents.height * 4 * sizeof(std::byte);
 
