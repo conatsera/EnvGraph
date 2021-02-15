@@ -133,14 +133,6 @@ class Engine
     void CreateControlGraphicsPipeline();
     void SetupRenderPass();
 
-    static void RenderThread(vk::Device device, vk::RenderPass renderPass, vk::SwapchainKHR &swapchain,
-                             uint32_t &currentFramebuffer, vk::Queue &graphicsQueue, vk::Queue &computeQueue,
-                             vk::Queue &presentQueue, std::vector<vk::Framebuffer> &framebuffers,
-                             std::vector<SwapchainImage_t> &swapchainImages, size_t &framebufferCount,
-                             std::vector<std::shared_ptr<Pipelines::EnginePipelineBase>> &enginePipelines,
-                             vk::ImageView &depthImageView, vk::CommandPool &graphicsCommandPool,
-                             vk::Extent2D &windowExtents, bool &engineEnabled, Engine *context);
-
     void SetupFramebuffers();
 
   private:
