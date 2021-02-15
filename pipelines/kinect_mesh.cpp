@@ -207,8 +207,13 @@ void KinectMesh::SetupVertexShader(const vk::UniqueDevice &device)
                         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);    
 }
 
+void KinectMesh::SetupBufferCallback(BufferGenFunc bufferGenCb) {
+    m_bufferGenCb = bufferGenCb;
+}
+
 void KinectMesh::PreRender(vk::Device const &device, vk::Extent2D windowExtent)
 {
+    m_bufferGenCb(m_depthBuffer, m_colorBuffer);
 }
 
 void KinectMesh::Render(vk::Device const &device, const vk::CommandBuffer &cmdBuffer, vk::Extent2D windowExtent)

@@ -23,6 +23,8 @@ enum KinectMeshImageIDs : BufferID_t
     kColorImage = 1
 };
 
+typedef std::function<bool(uint16_t*, glm::vec<4, uint8_t>*)> BufferGenFunc;
+
 constexpr const vk::Extent2D kDefaultScanExtents{512,512};
 
 class KinectMesh : public EnginePipeline<1, 2, 2, 0, 1, 0, 1> {
@@ -48,8 +50,11 @@ public:
     const vk::Extent2D GetScanExtents() const { return m_scanExtents; }
 
     const bool IsValid() const {
-        return (m_scanExtents.width != 0 || m_scanExtents.height != 0);
+        return (m_scanExtents.width != 0 && m_scanExtents.height != 0) &&
+               (m_bufferGenCb);
     }
+
+    void SetupBufferCallback(BufferGenFunc bufferCb);
 
 private:
     // TODO: Move this to the GraphicsEnginePipelineBase
@@ -77,9 +82,11 @@ private:
     EngineBuffer_t m_depthEngBuffer;
     uint16_t*      m_depthBuffer = nullptr;
 
-    vk::ImageView        m_colorImageView;
-    EngineBuffer_t       m_colorEngBuffer;
-    glm::vec<4, uint8_t> m_colorBuffer;
+    vk::ImageView         m_colorImageView;
+    EngineBuffer_t        m_colorEngBuffer;
+    glm::vec<4, uint8_t>* m_colorBuffer;
+
+    BufferGenFunc         m_bufferGenCb;
 
     const vk::Extent2D m_scanExtents{kDefaultScanExtents};
 
