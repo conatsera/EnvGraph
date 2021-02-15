@@ -76,7 +76,7 @@ class EnginePipelineBase
 
     virtual void Resized(vk::Extent2D windowExtents){};
 
-    virtual void Compute(const vk::Device &device, const vk::CommandBuffer &cmdBuffer){};
+    virtual void Compute(const vk::Device &device){};
 
   protected:
     vk::PhysicalDeviceMemoryProperties m_phyDevMemProps;
