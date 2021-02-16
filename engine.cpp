@@ -33,12 +33,13 @@ Engine::~Engine()
 {
     m_engineEnabled = false;
 
+    m_renderThread.join();
+
     for (auto &enginePipeline : m_enginePipelines)
     {
         enginePipeline->CleanupEnginePipeline(m_device);
+        delete enginePipeline;
     }
-
-    m_renderThread.join();
 
     for (const auto &framebuffer : m_framebuffers)
         m_device->destroyFramebuffer(framebuffer);
@@ -90,7 +91,7 @@ void Engine::CreateControlGraphicsPipeline()
     m_computeQueuesAvailable -= controlGraphicsQueueReqs.compute;
 }
 
-void Engine::NewPipeline(std::shared_ptr<EnginePipelineBase> newPipeline)
+void Engine::NewPipeline(EnginePipelineBase* newPipeline)
 {
     const std::lock_guard<std::mutex> lock(m_pipelineCreationLock);
     m_enginePipelines.push_back(newPipeline);

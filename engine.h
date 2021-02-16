@@ -73,11 +73,13 @@ class Engine
     {
         m_queuedPipelines.store(m_queuedPipelines.load() - removedPipelines);
     };
-    void NewPipeline(std::shared_ptr<Pipelines::EnginePipelineBase> newPipeline);
+    void NewPipeline(Pipelines::EnginePipelineBase* newPipeline);
 
     void CreateComponentPipelines();
 
     void StartRender();
+
+    void SetTestMode(bool testMode) { m_testMode = testMode; }
 
     void UpdateWindowExtents(uint32_t width, uint32_t height)
     {
@@ -138,6 +140,7 @@ class Engine
   private:
     std::thread m_renderThread;
     bool m_engineEnabled = false;
+    bool m_testMode = false;
 
     vk::DispatchLoaderDynamic m_dldy;
     vk::UniqueInstance m_instance;
@@ -171,7 +174,7 @@ class Engine
     vk::CommandPool m_graphicsCommandPool;
     vk::UniqueCommandBuffer m_graphicsCommandBuffer;
 
-    std::vector<std::shared_ptr<Pipelines::EnginePipelineBase>> m_enginePipelines;
+    std::vector<Pipelines::EnginePipelineBase*> m_enginePipelines;
 
     vk::Image m_depthImage;
     vk::ImageView m_depthImageView;
