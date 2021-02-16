@@ -33,10 +33,7 @@ void KinectMesh::Setup(const vk::UniqueDevice &device, vk::PhysicalDeviceMemoryP
     vertexInputBindingDesc.setStride(sizeof(glm::vec4) + sizeof(glm::ivec4));
 
     // 3D Scan coordinates (xyz) and filter opacity (w)
-    vertexInputAttrDesc = {
-        {0, 0, vk::Format::eR32G32B32A32Sfloat, 0},
-        {1, 0, vk::Format::eR32G32B32A32Uint, 16}
-    };
+    vertexInputAttrDesc = {{0, 0, vk::Format::eR32G32B32A32Sfloat, 0}, {1, 0, vk::Format::eR32G32B32A32Uint, 16}};
 
     vertexInfoStateCI.setVertexAttributeDescriptions(vertexInputAttrDesc);
 
@@ -90,13 +87,13 @@ void KinectMesh::CreateViewModelProjection(const vk::UniqueDevice &device)
                                                            vk::ShaderStageFlagBits::eVertex};
 
     vk::DescriptorSetLayoutBinding depthImageLayoutBinding{1, vk::DescriptorType::eStorageImage, 1,
-                                                             vk::ShaderStageFlagBits::eVertex};
+                                                           vk::ShaderStageFlagBits::eVertex};
 
     vk::DescriptorSetLayoutBinding colorImageLayoutBinding{2, vk::DescriptorType::eStorageImage, 1,
-                                                             vk::ShaderStageFlagBits::eVertex};
+                                                           vk::ShaderStageFlagBits::eVertex};
 
-    std::array<vk::DescriptorSetLayoutBinding, 3> layoutBindings{
-        viewParamsLayoutBinding, depthImageLayoutBinding, colorImageLayoutBinding};
+    std::array<vk::DescriptorSetLayoutBinding, 3> layoutBindings{viewParamsLayoutBinding, depthImageLayoutBinding,
+                                                                 colorImageLayoutBinding};
 
     vk::DescriptorSetLayoutCreateInfo viewParamsLayoutCreateInfo{vk::DescriptorSetLayoutCreateFlags(), layoutBindings};
 
@@ -140,6 +137,9 @@ void KinectMesh::CreateShaders(const vk::UniqueDevice &device)
     m_shaderStages.push_back(kinectMeshFragPipelineShaderStageCI);
 }
 
+constexpr const size_t kDepthBufferSize = 1024 * 1024 * sizeof(uint16_t);
+constexpr const size_t kColorBufferSize = 4096 * 3072 * sizeof(uint8_t) * 4;
+
 void KinectMesh::SetupVertexShader(const vk::UniqueDevice &device)
 {
     vk::BufferCreateInfo vertBufferCI{vk::BufferCreateFlags{},
@@ -167,12 +167,10 @@ void KinectMesh::SetupVertexShader(const vk::UniqueDevice &device)
 
     vk::ImageSubresourceRange depthImageSR{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
 
-    m_depthImageView = CreateNewImage(device, kDepthImage, 1, m_meshDescSetID, depthImageCI, depthImageSR,
-                                      vk::ImageLayout::eGeneral);
+    m_depthImageView =
+        CreateNewImage(device, kDepthImage, 1, m_meshDescSetID, depthImageCI, depthImageSR, vk::ImageLayout::eGeneral);
 
-    constexpr const size_t depthBufferSize = 1024 * 1024 * sizeof(uint16_t);
-
-    vk::BufferCreateInfo depthBufferCI{vk::BufferCreateFlags(), depthBufferSize, vk::BufferUsageFlagBits::eTransferSrc,
+    vk::BufferCreateInfo depthBufferCI{vk::BufferCreateFlags(), kDepthBufferSize, vk::BufferUsageFlagBits::eTransferSrc,
                                        vk::SharingMode::eExclusive};
 
     m_depthEngBuffer =
@@ -194,26 +192,98 @@ void KinectMesh::SetupVertexShader(const vk::UniqueDevice &device)
 
     vk::ImageSubresourceRange colorImageSR{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
 
-    m_colorImageView = CreateNewImage(device, kColorImage, 2, m_meshDescSetID, colorImageCI, colorImageSR,
-                                      vk::ImageLayout::eGeneral);
+    m_colorImageView =
+        CreateNewImage(device, kColorImage, 2, m_meshDescSetID, colorImageCI, colorImageSR, vk::ImageLayout::eGeneral);
 
-    constexpr const size_t colorBufferSize = 4096 * 3072 * sizeof(uint8_t) * 4;
-
-    vk::BufferCreateInfo colorBufferCI{vk::BufferCreateFlags(), colorBufferSize, vk::BufferUsageFlagBits::eTransferSrc,
+    vk::BufferCreateInfo colorBufferCI{vk::BufferCreateFlags(), kColorBufferSize, vk::BufferUsageFlagBits::eTransferSrc,
                                        vk::SharingMode::eExclusive};
 
     m_colorEngBuffer =
         CreateNewBuffer(device, kColorBuffer, colorBufferCI, reinterpret_cast<void **>(&m_colorBuffer),
-                        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);    
+                        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+    device->bindBufferMemory(m_depthEngBuffer.buffer, m_depthEngBuffer.devMem, 0);
+    device->bindBufferMemory(m_colorEngBuffer.buffer, m_colorEngBuffer.devMem, 0);
 }
 
-void KinectMesh::SetupBufferCallback(BufferGenFunc bufferGenCb) {
+void KinectMesh::SetupBufferCallback(BufferGenFunc bufferGenCb)
+{
     m_bufferGenCb = bufferGenCb;
 }
 
 void KinectMesh::PreRender(vk::Device const &device, vk::Extent2D windowExtent)
 {
     m_bufferGenCb(m_depthBuffer, m_colorBuffer);
+
+    constexpr const vk::ImageSubresourceRange imageSR{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
+
+    std::array<vk::MappedMemoryRange, 2> imageBufferMemRanges{
+        vk::MappedMemoryRange{m_depthEngBuffer.devMem, 0, kDepthBufferSize},
+        vk::MappedMemoryRange{m_colorEngBuffer.devMem, 0, kColorBufferSize},
+    };
+
+    device.flushMappedMemoryRanges(imageBufferMemRanges);
+
+    vk::ImageMemoryBarrier depthCopyBarrier{vk::AccessFlags{},           vk::AccessFlagBits::eTransferWrite,
+                                            vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
+                                            VK_QUEUE_FAMILY_IGNORED,     VK_QUEUE_FAMILY_IGNORED,
+                                            m_images[kDepthImage],       imageSR};
+
+    vk::ImageMemoryBarrier colorCopyBarrier{vk::AccessFlags{},           vk::AccessFlagBits::eTransferWrite,
+                                            vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
+                                            VK_QUEUE_FAMILY_IGNORED,     VK_QUEUE_FAMILY_IGNORED,
+                                            m_images[kColorImage],       imageSR};
+
+    std::array<vk::ImageMemoryBarrier, 2> copyBarriers{depthCopyBarrier, colorCopyBarrier};
+
+    vk::CommandBufferAllocateInfo graphicsCommandBufferAI{m_graphicsCommandPool.get(), vk::CommandBufferLevel::ePrimary,
+                                                          1};
+
+    vk::UniqueCommandBuffer cmdBuffer;
+    cmdBuffer.swap(device.allocateCommandBuffersUnique(graphicsCommandBufferAI)[0]);
+
+    vk::CommandBufferBeginInfo cmdBufBI{vk::CommandBufferUsageFlagBits::eOneTimeSubmit};
+
+    cmdBuffer->begin(cmdBufBI);
+
+    cmdBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eTransfer, {}, {}, {},
+                               copyBarriers);
+
+    vk::BufferImageCopy copyRegion = {};
+    copyRegion.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
+    copyRegion.imageSubresource.layerCount = 1;
+    copyRegion.imageExtent.depth = 1;
+    copyRegion.imageExtent.width = 1024;
+    copyRegion.imageExtent.height = 1024;
+
+    cmdBuffer->copyBufferToImage(m_depthEngBuffer.buffer, m_images[kDepthImage], vk::ImageLayout::eTransferDstOptimal,
+                                 copyRegion);
+
+    copyRegion.imageExtent.width = 4096;
+    copyRegion.imageExtent.height = 3072;
+
+    cmdBuffer->copyBufferToImage(m_colorEngBuffer.buffer, m_images[kColorImage], vk::ImageLayout::eTransferDstOptimal,
+                                 copyRegion);
+
+    std::array<vk::ImageMemoryBarrier, 2> useBarriers{
+        vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
+                               vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eGeneral, VK_QUEUE_FAMILY_IGNORED,
+                               VK_QUEUE_FAMILY_IGNORED, m_images[kDepthImage], imageSR},
+        vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
+                               vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eGeneral, VK_QUEUE_FAMILY_IGNORED,
+                               VK_QUEUE_FAMILY_IGNORED, m_images[kColorImage], imageSR},
+    };
+
+    cmdBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eVertexShader, {}, {},
+                               {}, useBarriers);
+
+    vk::SubmitInfo bufferImageCopiesSI{{}, {}, cmdBuffer.get(), {}};
+
+    cmdBuffer->end();
+
+    m_graphicsQueues[0].submit(bufferImageCopiesSI);
+
+    device.waitIdle();
 }
 
 void KinectMesh::Render(vk::Device const &device, const vk::CommandBuffer &cmdBuffer, vk::Extent2D windowExtent)
@@ -227,6 +297,10 @@ void KinectMesh::Render(vk::Device const &device, const vk::CommandBuffer &cmdBu
     const vk::DeviceSize offsets[1]{// TODO: offset into scan to avoid measuring null pixels
                                     0};
     cmdBuffer.bindVertexBuffers(0, 1, &m_scanEngBuf.buffer, offsets);
+
+    const std::array<glm::vec2, 3> tempFilterParams = {glm::vec2{1, -1}, glm::vec2{1, -1}, glm::vec2{1, -1}};
+    cmdBuffer.pushConstants(m_pipelineLayout.get(), vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::vec2) * 3,
+                            tempFilterParams.data());
 
     cmdBuffer.draw(m_scanExtents.width * m_scanExtents.height * 3, 1, 0, 0);
 }
