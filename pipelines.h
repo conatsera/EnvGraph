@@ -39,6 +39,9 @@ typedef struct DescriptorInfo
 class EnginePipelineBase
 {
   public:
+    EnginePipelineBase()
+    {
+    }
     virtual ~EnginePipelineBase()
     {
     }
@@ -138,11 +141,16 @@ template <uint32_t compute_queue_count> class ComputeEnginePipelineBase
     }
 };
 
+class NullBase
+{
+};
+
 template <uint32_t descriptor_set_count, uint32_t image_count, uint32_t buffer_count, uint32_t sampler_count,
           uint32_t graphics_queue_count, uint32_t compute_queue_count, uint32_t push_constant_count = 0>
 class EnginePipeline : public EnginePipelineBase,
-                       public GraphicsEnginePipelineBase<graphics_queue_count>,
-                       public ComputeEnginePipelineBase<compute_queue_count>
+      public std::conditional<(graphics_queue_count > 0), GraphicsEnginePipelineBase<graphics_queue_count>,
+                              NullBase>::type,
+      public std::conditional<(compute_queue_count > 0), ComputeEnginePipelineBase<compute_queue_count>, NullBase>::type
 {
   public:
     virtual void Setup(const vk::UniqueDevice &device, vk::PhysicalDeviceMemoryProperties phyDevMemProps,

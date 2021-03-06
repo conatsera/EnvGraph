@@ -1,6 +1,5 @@
 #include "radio.h"
 
-#include <experimental/coroutine>
 #include <iostream>
 #include <semaphore>
 
@@ -12,7 +11,7 @@ namespace Engine
 namespace Pipelines
 {
 
-template <const size_t buffer_size, const size_t avg_count, const int fft_shift_amount, const bool top,
+template <const int buffer_size, const size_t avg_count, const int fft_shift_amount, const bool top,
           const bool max_hold, const bool prep = false>
 auto AverageFunction(uint32_t currentAvgPos, fftw_complex *output, float *radioSignalData, float **radioSignalAvgBuffer)
 {
@@ -88,7 +87,7 @@ void CalculateRadioSignal(bool &shutdownSignal, lms_stream_t &streamId,
     fftw_complex *input = (fftw_complex *)fftw_malloc(kMaxComplexBufferBytes);
     fftw_complex *output = (fftw_complex *)fftw_malloc(kMaxComplexBufferBytes);
     float **radioSignalAvgBuffer = (float **)malloc(sizeof(float *) * avg_count);
-    for (auto i = 0; i < avg_count; i++)
+    for (size_t i = 0; i < avg_count; i++)
         radioSignalAvgBuffer[i] = (float *)malloc(sizeof(float) * buffer_size);
 
     uint32_t currentAvgPos = 0;
@@ -103,10 +102,10 @@ void CalculateRadioSignal(bool &shutdownSignal, lms_stream_t &streamId,
     {
         startNextCalcSignal.acquire();
 
-        for (int i = 0; i < buffer_size * 2; i++)
+        for (size_t i = 0; i < buffer_size * 2; i++)
             radioSignalData[i] = 0.f;
-        for (int i = 0; i < avg_count; i++)
-            for (int j = 0; j < buffer_size; j++)
+        for (size_t i = 0; i < avg_count; i++)
+            for (size_t j = 0; j < buffer_size; j++)
                 radioSignalAvgBuffer[i][j] = 0.f;
 
         currentAvgPos = 0;
@@ -116,11 +115,11 @@ void CalculateRadioSignal(bool &shutdownSignal, lms_stream_t &streamId,
         {
             LMS_RecvStream(&streamId, buffer, buffer_size, NULL, 1000);
 
-            for (auto i = 0; i < buffer_size / 2; i++)
+            for (size_t i = 0; i < buffer_size / 2; i++)
             {
                 input[i][0] = (double)buffer[i * 2];
             }
-            for (auto i = 0; i < buffer_size / 2; i++)
+            for (size_t i = 0; i < buffer_size / 2; i++)
                 input[i][1] = (double)buffer[1 + (i * 2)];
 
             fftw_execute(radioFFTPlan);
@@ -162,7 +161,7 @@ void CalculateRadioSignal(bool &shutdownSignal, lms_stream_t &streamId,
                                        sigAvg, sigPointIndex, currentAvgPos, overflown, radioSignalAvgBuffer);
         }
 
-        for (int i = (fft_shift_amount * 2) + 1; i < buffer_size * 2; i+=2)
+        for (size_t i = (fft_shift_amount * 2) + 1; i < buffer_size * 2; i+=2)
         {
             vertPointIndex = (i - (fft_shift_amount * 2));
             sigPointIndex = (((i-1)/2) - (fft_shift_amount));
@@ -231,7 +230,6 @@ void RadioPipeline::CleanupEnginePipeline(const vk::UniqueDevice &device)
     m_settings.currentTimePos++;
     currentTimePos++;
     m_shutdownSignal = true;
-    __attribute__((unused)) auto test = m_mainRadioThread.joinable();
     if (m_mainRadioThread.joinable())
         m_mainRadioThread.join();
 

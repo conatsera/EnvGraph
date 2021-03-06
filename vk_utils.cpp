@@ -62,6 +62,13 @@ vk::UniqueInstance createInstance(std::string const &appName, std::string const 
 #if VK_USE_PLATFORM_XCB_KHR
     enabledExtensions.push_back("VK_KHR_xcb_surface");
 #endif
+#if VK_USE_PLATFORM_WIN32_KHR
+    enabledExtensions.push_back("VK_KHR_win32_surface");
+    enabledExtensions.push_back("VK_KHR_display");
+    enabledExtensions.push_back("VK_KHR_get_display_properties2");
+    enabledExtensions.push_back("VK_KHR_get_surface_capabilities2");
+    enabledExtensions.push_back("VK_KHR_surface");
+#endif
 #if !defined(NDEBUG)
     if (std::find(extensions.begin(), extensions.end(), VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == extensions.end())
     {
@@ -187,7 +194,7 @@ void Engine::InitVulkan(std::vector<std::string> const &extraExtensions)
 #ifdef _WIN32
     if (extraExtensions.size() == 0)
     {
-        vk::Win32SurfaceCreateInfoKHR win32SurfaceCreateInfo(vk::Win32SurfaceCreateFlagsKHR(), GetModuleHandle(nullptr),
+        vk::Win32SurfaceCreateInfoKHR win32SurfaceCreateInfo(vk::Win32SurfaceCreateFlagsKHR(), GetModuleHandle(NULL),
                                                              m_window);
         m_surface = m_instance->createWin32SurfaceKHR(win32SurfaceCreateInfo);
     }

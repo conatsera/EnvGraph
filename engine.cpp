@@ -289,7 +289,7 @@ void Engine::StartRender()
                 {
                     presentResult = m_presentQueue.presentKHR(present);
                 }
-                catch (const vk::OutOfDateKHRError &e)
+                catch (const vk::OutOfDateKHRError &)
                 {
                     m_engineEnabled = false;
                     break;

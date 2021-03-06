@@ -7,7 +7,11 @@
 #include <mutex>
 #include <thread>
 
+#ifdef _WIN32
+#include <Windows.h>
+#else
 #include <xcb/xcb.h>
+#endif
 
 #include <vulkan/vulkan.hpp>
 
