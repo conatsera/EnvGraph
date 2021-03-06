@@ -1,6 +1,10 @@
 // Tests an edge filter using the kinect mesh shader pipeline
 
+#include <cstdlib>
+
 #include <gtest/gtest.h>
+
+#include <glm/gtx/quaternion.hpp>
 
 #include "engine.h"
 #include "pipelines/kinect_mesh.h"
@@ -25,7 +29,7 @@ class EdgeTest : public EnvGraph::TestBase
         m_kinectMesh = new KinectMesh();
         m_aEngine->NewPipeline(m_kinectMesh);
 
-        std::srand(std::time(nullptr));
+        std::srand((unsigned int)std::time(nullptr));
     }
 
   protected:
@@ -53,35 +57,56 @@ TEST_F(EdgeTest, createBufferCallbacks)
 }
 
 constexpr const size_t kDepthSize = 1024 * 1024;
-constexpr const size_t kColorSize = 4096 * 3072;
+//constexpr const size_t kColorSize = 4096 * 3072;
 
 static void GenerateEdge(uint16_t *depthBuffer, glm::vec<4, uint8_t> *colorBuffer)
 {
+    auto x = ((double)std::rand() / (double)RAND_MAX) * 1024;
+    auto y = ((double)std::rand() / (double)RAND_MAX) * 1024;
+    auto z = ((double)std::rand() / (double)RAND_MAX) * UINT16_MAX;
+    auto width = std::floor(((double)std::rand() / (double)RAND_MAX) * 16);
+    auto length = ((double)std::rand() / (double)RAND_MAX) * 128;
 
-    auto x = ((float)std::rand() / (float)RAND_MAX) * 1024;
-    auto y = ((float)std::rand() / (float)RAND_MAX) * 1024;
-    //auto width = std::floor(((float)std::rand() / (float)RAND_MAX) * 16);
-    auto length = ((float)std::rand() / (float)RAND_MAX) * 16;
-    auto angle = ((float)std::rand() / (float)RAND_MAX) * 360.f;
+
+    ASSERT_LT(x, UINT16_MAX);
+    ASSERT_GT(x, 0);
+    ASSERT_LT(y, UINT16_MAX);
+    ASSERT_GT(y, 0);
+    ASSERT_LT(z, UINT16_MAX);
+    ASSERT_GT(z, 0);
+
+    ASSERT_LT(width, 16);
+    ASSERT_GT(width, 0);
+    ASSERT_LT(length, 128);
+    ASSERT_GT(length, 0);
+    
+    glm::highp_quat edgeQuat = glm::identity<glm::highp_quat>();
 
     for (int i = 0; i < (int)std::ceil(length); i++)
     {
-        auto xPixel = x + (std::sin(angle) * i);
-        auto yPixel = y + (std::cos(angle) * i);
+        auto edgeAngles = glm::eulerAngles(edgeQuat);
+        auto xPixel = (int)std::floor(x + (std::sin(edgeAngles.x) * i));
+        auto yPixel = (int)std::floor(y + (std::cos(edgeAngles.y) * i));
+        auto zNext = (uint16_t)std::floor(z + (std::tan(edgeAngles.z) * i));
         auto pixel = xPixel + (yPixel * 1024);
-        std::cout << i << ": { " << xPixel << ", " << yPixel << " }: " << pixel << std::endl;
-    }
-
-    for (size_t i = 0; i < kDepthSize; i++)
-    {
-        // TODO: Generate some noise
-    }
-
-    for (size_t i = 0; i < kColorSize; i++)
-    {
-
+        //std::cout << i << ": { " << xPixel << ", " << yPixel << " }, pixel:" << pixel << ", depth:" << zNext << std::endl;
+        ASSERT_LT(pixel, kDepthSize);
+        assert(zNext < UINT16_MAX && zNext > 0);
+        depthBuffer[pixel] = 0xFFFF;
     }
 }
+
+template<uint32_t n>
+static void GenerateEdges(uint16_t* depthBuffer, glm::vec<4, uint8_t> *colorBuffer) {
+    for (uint32_t i = 0; i < n; i++) {
+        GenerateEdge(depthBuffer, colorBuffer);
+    }
+}
+
+enum EdgeResolution {
+    STANDARD = 256,
+    HIGH = 1024,
+};
 
 TEST_F(EdgeTest, populateBuffers)
 {
@@ -91,7 +116,7 @@ TEST_F(EdgeTest, populateBuffers)
     bool bufferCbHasRun = false;
 
     auto bufferCb = [&bufferCbHasRun](uint16_t *pipelineDepthBuf, glm::vec<4, uint8_t>* pipelineColorBuf) -> bool {
-        GenerateEdge(pipelineDepthBuf, pipelineColorBuf);
+        GenerateEdges<STANDARD>(pipelineDepthBuf, pipelineColorBuf);
 
         bufferCbHasRun = true;
 
@@ -113,5 +138,11 @@ TEST_F(EdgeTest, populateBuffers)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
     ASSERT_EQ(bufferCbHasRun, true);
+}
+
+TEST_F(EdgeTest, drawCube) {
+    
 }
