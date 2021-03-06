@@ -4,7 +4,12 @@
 #include <thread>
 
 #include <gtest/gtest.h>
+#ifdef _WIN32
+#include <Windows.h>
+#include <windowsx.h>
+#else
 #include <xcb/xcb.h>
+#endif
 
 #include "engine.h"
 
@@ -14,23 +19,50 @@ namespace EnvGraph
 class TestBase : public ::testing::Test {
 protected:
     void SetUp() override {
-        SetupXWindow();
+        SetupWindow();
         SetupEngine();
-        SetupXInputThread();
+
+        m_engineReady = true;
+
+        SetupInputThread();
     }
 
     void TearDown() override {
+        m_engineReady = false;
         m_aEngine.reset();
 
+#ifdef _WIN32
+        CloseWindow(m_window);
+#else
         xcb_destroy_window_checked(m_xConnection, m_xWindow);
+#endif
 
         m_shutdownSignal = true;
-        m_xInputThread.join();
+        m_inputThread.join();
+#ifdef _WIN32
 
+#else
         xcb_disconnect(m_xConnection);
+#endif
     }
 
-    void SetupXWindow() {
+    void SetupWindow() {
+        
+#ifdef _WIN32
+        WNDCLASS wc = {0};
+
+        wc.lpfnWndProc   = View::WindowProc;
+        wc.hInstance     = GetModuleHandle(NULL);
+        wc.lpszClassName = L"Test Window Class";
+
+        RegisterClass(&wc);
+
+        m_window = CreateWindowEx(WS_EX_APPWINDOW, L"Test Window Class", L"Test Window",
+                                WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_VISIBLE | WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
+                                CW_USEDEFAULT,
+                                kDefaultWidth, kDefaultHeight, NULL, NULL, GetModuleHandle(NULL), this);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+#else
         m_xConnection = xcb_connect(NULL, NULL);
 
         const xcb_setup_t *xSetup = xcb_get_setup(m_xConnection);
@@ -52,14 +84,18 @@ protected:
         {
             //std::cerr << "XCB Flush failed: " << flushRet << std::endl;
         }
+#endif
     }
 
-    void SetupXInputThread() {
-        m_xInputThread = std::thread([this] {
+    void SetupInputThread() {
+        
+#ifndef _WIN32
+        m_inputThread = std::thread([this] {
             vk::Extent2D currentWindowExtents{kDefaultWidth, kDefaultHeight};
 
             while (!m_shutdownSignal)
             {
+
                 auto newEvent = xcb_wait_for_event(m_xConnection);
                 if (newEvent != nullptr)
                 {
@@ -84,23 +120,30 @@ protected:
                 std::this_thread::sleep_for(std::chrono::microseconds(250));
             }
         });
+#endif
     }
 
     void SetupEngine() {
 #ifdef VK_USE_PLATFORM_XCB_KHR
         m_aEngine = std::make_unique<Engine::Engine>(m_xConnection, m_xWindow);
-#elif
-
+#else
+        m_aEngine = std::make_unique<Engine::Engine>(m_window);
 #endif
     }
 
 protected:
+    bool m_engineReady = false;
     std::unique_ptr<Engine::Engine> m_aEngine;
+
+#ifdef _WIN32
+    HWND m_window = NULL;
+#else
     xcb_connection_t* m_xConnection;
     xcb_window_t m_xWindow;
+#endif
 
     bool m_shutdownSignal = false;
-    std::thread m_xInputThread;
+    std::thread m_inputThread;
 };
 
 
