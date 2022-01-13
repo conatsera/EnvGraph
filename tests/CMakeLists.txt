@@ -1,13 +1,21 @@
 include(GoogleTest)
 
-add_executable(edge-ut depth/edge_ut.cc)
+add_compile_definitions(TEST_DEFAULT_WIDTH=512 TEST_DEFAULT_HEIGHT=512)
 
-target_link_libraries(edge-ut PRIVATE envgraph gtest)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/test/bin")
 
-target_include_directories(edge-ut PRIVATE "${gtest_SOURCE_DIR}/include")
+add_subdirectory(events)
 
-add_executable(view-ut ui/view_ut.cc)
+add_subdirectory(ui)
 
-target_link_libraries(view-ut PRIVATE envgraph gtest)
+add_subdirectory(engine)
 
-target_include_directories(view-ut PRIVATE "${gtest_SOURCE_DIR}/include")
+add_subdirectory(depth)
+
+if (WIN32)
+
+	find_file(SDL_DLL SDL2.dll HINTS "$ENV{VULKAN_SDK}/Third-Party/Bin")
+
+	file(COPY ${SDL_DLL} DESTINATION "${PROJECT_BINARY_DIR}/test/bin")
+
+endif()

@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
 
-class ControlFixture {
+class ControlFixture
+{
 
-private:
+  private:
     CameraController
-
 };
 
 TEST_F(ControlFixture, "move")

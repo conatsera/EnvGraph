@@ -1,3 +1,3 @@
-
-
-add_subdirectory(googletest EXCLUDE_FROM_ALL)
+if (${TESTING_ENABLED})
+    add_subdirectory(googletest EXCLUDE_FROM_ALL)
+endif()

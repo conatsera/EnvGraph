@@ -2,57 +2,86 @@
 
 #include "ui/view_controller.h"
 
-#include "engine.h"
 #include "../base.h"
+#include "engine.h"
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv)
+{
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
 
-using EnvGraph::View;
-using EnvGraph::ViewController;
+using namespace EnvGraph;
 
-class ViewTest : public EnvGraph::TestBase {
-protected:
-    void SetUp() override {
+class ViewTest : public EnvGraph::TestBase
+{
+  protected:
+    void SetUp() override
+    {
         EnvGraph::TestBase::SetUp();
 
-        vc.NewView(EnvGraph::ViewType::LOCAL_LINUX, view);
+        m_view = std::make_shared<UI::View>();
 
-#ifdef _WIN32
-        view.SetWin32(m_window);
-#else
-        view.SetXCB(m_xConnection);
-#endif
+        m_view->SetTitle("Test");
 
-        m_aEngine->StartRender();
-    };
+        m_viewController->NewView(EnvGraph::UI::ViewType::LOCAL, m_view, kDefaultWidth, kDefaultHeight);
 
-    void TearDown() override {
-        ASSERT_EQ(vc.CloseView(view), 0);
-        EnvGraph::TestBase::TearDown();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     };
-
-private:
-    ViewController vc;
-    View view;
 };
 
-TEST_F(ViewTest, create) {
-    ASSERT_EQ(true, false);
+TEST_F(ViewTest, createAndDestroy)
+{
+    m_view->Run();
+    //ASSERT_STREQ(SDL_GetError(), "");
 }
 
-/*
-TEST_F(ViewTest, destroy) {
-    ASSERT_EQ(true, false);
+TEST_F(ViewTest, viewEvents)
+{
+    int resizeEventTriggered = 0;
+    int shownEventTriggered = 0;
+    int hiddenEventTriggered = 0;
+
+    auto resizeSub =
+        m_view->CreateNewSub(RenderEventBits::RESIZE, [&resizeEventTriggered](EnvGraph::UI::ViewMsg e) {
+            resizeEventTriggered++;
+
+            ASSERT_EQ(e.m_eventType, EnvGraph::Events::RENDER);
+            ASSERT_EQ(e.m_eventSubType, RenderEventBits::RESIZE);
+
+            if (resizeEventTriggered == 1)
+            {
+                ASSERT_EQ(e.m_newExtent.x, 1920);
+                ASSERT_EQ(e.m_newExtent.y, 1080);
+            }
+            ASSERT_NE(e.m_newExtent.x, 0);
+            ASSERT_NE(e.m_newExtent.y, 0);
+            std::cout << "X: " << e.m_newExtent.x << ", Y: " << e.m_newExtent.y << std::endl;
+        });
+
+    auto visSub =
+        m_view->CreateNewSub(RenderEventBits::VISIBILITY,
+                            [&shownEventTriggered, &hiddenEventTriggered](EnvGraph::UI::ViewMsg e) {
+                                ASSERT_EQ(e.m_eventType, EnvGraph::Events::RENDER);
+                                if (e.m_hidden)
+                                    shownEventTriggered++;
+                                else
+                                    hiddenEventTriggered++;
+                                std::cout << "Hidden: " << e.m_hidden << std::endl;
+                            });
+
+    // m_view.Minimize();
+    m_view->ResizeWindow(1920, 1080);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    ASSERT_EQ(resizeEventTriggered, 1);
+    
+    m_view->Run();
+
+    ASSERT_GT(resizeEventTriggered, 1);
 }
 
-TEST_F(ViewTest, input) {
+TEST_F(ViewTest, attach)
+{
     ASSERT_EQ(true, false);
 }
-
-TEST_F(ViewTest, attach) {
-    ASSERT_EQ(true, false);
-}*/

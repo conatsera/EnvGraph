@@ -4,12 +4,11 @@
 
 #include "virtual_camera.h"
 
-class VirtualCameraFixture {
+class VirtualCameraFixture
+{
 
-
-private:
+  private:
     std::unique_ptr<VirtualCamera> camera_;
-
 
 }
 
