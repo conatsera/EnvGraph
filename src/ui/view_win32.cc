@@ -11,7 +11,7 @@ namespace UI
 
 constexpr const UINT_PTR kGestureEngineTimerID = 10;
 
-View::View()
+View::View(std::shared_ptr<UI::InputManager> inputManager) : m_inputManager(inputManager)
 {
     m_occlusion = DWORD(0.0);
 }
@@ -142,6 +142,8 @@ LRESULT View::OnCreate(_In_ UINT, _In_ WPARAM, _In_ LPARAM lParam, _Out_ BOOL &b
 LRESULT
 View::OnDestroy(_In_ UINT, _In_ WPARAM, _In_ LPARAM, _Out_ BOOL &bHandled)
 {
+    m_quit = true;
+
     PostQuitMessage(0);
 
     bHandled = TRUE;

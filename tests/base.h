@@ -13,6 +13,7 @@
 
 #include "engine.h"
 #include "ui/view_controller.h"
+#include "ui/input.h"
 
 namespace EnvGraph
 {
@@ -40,11 +41,17 @@ class TestBase : public ::testing::Test
 
     void TearDown() override
     {
-        m_view->Run();
+        if (!m_view->HasQuit())
+            m_view->Run();
         m_engineReady = false;
         m_engine.reset();
         m_engine.release();
         m_view.reset();
+    }
+
+    void SetupInputManager()
+    {
+        m_inputManager = std::make_shared<UI::InputManager>();
     }
 
     void SetupViewController()
@@ -54,7 +61,7 @@ class TestBase : public ::testing::Test
 
     void SetupView(std::shared_ptr<UI::View> &view)
     {
-        view = std::make_shared<UI::View>();
+        view = std::make_shared<UI::View>(m_inputManager);
 
         view->SetTitle("Test");
 
@@ -74,6 +81,7 @@ class TestBase : public ::testing::Test
     bool m_engineReady = false;
     std::unique_ptr<Engine> m_engine;
 
+    std::shared_ptr<UI::InputManager> m_inputManager;
     std::unique_ptr<UI::ViewController> m_viewController;
 
     std::shared_ptr<UI::View> m_view;

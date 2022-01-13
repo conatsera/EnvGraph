@@ -19,6 +19,8 @@
 #include "common.h"
 #include "events.h"
 
+#include "ui/input.h"
+
 namespace EnvGraph
 {
 namespace UI
@@ -57,7 +59,6 @@ struct ViewMsg : Message
         {
             m_newExtent[i] = rhs.m_newExtent[i];
         }
-
     }*/
 };
 
@@ -71,7 +72,7 @@ class View : public Publisher<ViewMsg, RenderEventBits>
 #endif
 {
   public:
-    View();
+    View(std::shared_ptr<InputManager> inputManager);
     ~View();
 
     std::string GetTitle() const
@@ -106,6 +107,11 @@ class View : public Publisher<ViewMsg, RenderEventBits>
 #endif
     }
 
+    bool HasQuit() const
+    {
+        return m_quit;
+    }
+
     bool IsVisible() const;
 
 #ifdef WIN32
@@ -118,6 +124,9 @@ class View : public Publisher<ViewMsg, RenderEventBits>
 #endif
 
   private:
+    std::shared_ptr<InputManager> m_inputManager;
+
+    bool m_quit = false;
     bool m_visible;
     std::string m_title{""};
     float m_dpi = 96.0F;

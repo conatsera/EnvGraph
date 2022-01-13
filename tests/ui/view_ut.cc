@@ -15,25 +15,11 @@ using namespace EnvGraph;
 
 class ViewTest : public EnvGraph::TestBase
 {
-  protected:
-    void SetUp() override
-    {
-        EnvGraph::TestBase::SetUp();
 
-        m_view = std::make_shared<UI::View>();
-
-        m_view->SetTitle("Test");
-
-        m_viewController->NewView(EnvGraph::UI::ViewType::LOCAL, m_view, kDefaultWidth, kDefaultHeight);
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-    };
 };
 
 TEST_F(ViewTest, createAndDestroy)
 {
-    m_view->Run();
     //ASSERT_STREQ(SDL_GetError(), "");
 }
 

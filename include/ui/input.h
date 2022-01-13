@@ -2,8 +2,8 @@
 #define ENVGRAPH_INPUT_H
 
 #include <array>
+#include <cassert>
 
-#include <ui/view.h>
 #include <events.h>
 
 namespace EnvGraph
