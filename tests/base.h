@@ -32,6 +32,7 @@ class TestBase : public ::testing::Test
   protected:
     void SetUp() override
     {
+        SetupInputManager();
         SetupViewController();
         SetupView(m_view);
         SetupEngine(m_engine, m_view);

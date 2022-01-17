@@ -24,15 +24,32 @@ View::~View()
 void CALLBACK View::InteractionCallback(_In_opt_ void *clientData,
                                          _In_reads_(1) const INTERACTION_CONTEXT_OUTPUT *output)
 {
-    std::cout << output->inputType << " : ( " << output->x << ", " << output->y << " )" << std::endl;
+    if (clientData != nullptr)
+    {
+        View *view = reinterpret_cast<View *>(clientData);
+
+        POINT pt{std::round(output->x), std::round(output->y)};
+
+        view->ScreenToClient(&pt);
+
+        uint32_t tapCount = 0;
+        if (output->inputType != tagPOINTER_INPUT_TYPE::PT_MOUSE)
+            tapCount = output->arguments.tap.count;
+
+        //std::cout << output->inputType << " : ( " << output->x << ", " << output->y << " ), ( " << pt.x << ", "
+        //            << pt.y << " )" << std::endl;
+        if (output->interactionId == INTERACTION_ID::INTERACTION_ID_TAP ||
+            output->interactionId == INTERACTION_ID::INTERACTION_ID_SECONDARY_TAP)
+            view->m_inputManager->NewInputEvent(InputMessage({pt.x, pt.y}, {output->x, output->y}, tapCount));
+    }
 }
 
 HRESULT View::Initialize(_In_ Extent extent, _In_ std::wstring title)
 {
     RECT bounds;
 
-    bounds.left = 10;
-    bounds.top = 10;
+    bounds.left = 100;
+    bounds.top = 100;
     bounds.right = extent.x;
     bounds.bottom = extent.y;
 
@@ -357,6 +374,12 @@ void View::PointerHandling(UINT pointerId)
             }
         }
     }
+}
+
+LRESULT View::OnRecvChar(_In_ UINT, _In_ WPARAM wparam, _In_ LPARAM lparam, _Out_ BOOL &bHandled)
+{
+    bHandled = true;
+    return 0;
 }
 
 LRESULT View::OnTimerUpdate(_In_ UINT, _In_ WPARAM wparam, _In_ LPARAM lparam, _Out_ BOOL &bHandled)
