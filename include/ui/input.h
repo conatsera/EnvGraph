@@ -4,7 +4,8 @@
 #include <array>
 #include <cassert>
 
-#include <events.h>
+#include "events.h"
+#include "common.h"
 
 namespace EnvGraph
 {
@@ -45,7 +46,14 @@ struct StatusMessage : Message
 struct InputMessage : Message
 {
     InputMessage() : Message(Events::INPUT, 0) {}
-
+    InputMessage(Location2D windowPointer, Location2D screenPointer, uint32_t tapCount)
+        : Message(Events::INPUT, InputDevice_t::POINTER), windowPointer(windowPointer), screenPointer(screenPointer),
+          tapCount(tapCount)
+    {
+    }
+    Location2D windowPointer{0,0};
+    Location2D screenPointer{0,0};
+    uint32_t tapCount = 0;
 };
 
 using StatusPub = Publisher<StatusMessage, InputEvent_t, 32>;
@@ -55,22 +63,22 @@ class InputManager :
     public StatusPub, public InputPub
 {
   public:
-    void NewStatusSub(StatusPub::SubCallbackFunc func)
+    auto NewStatusSub(StatusPub::SubCallbackFunc func)
     {
-        StatusPub::CreateNewSub(func);
+        return StatusPub::CreateNewSub(func);
     }
-    void NewStatusSub(InputEvent_t type, StatusPub::SubCallbackFunc func)
+    auto NewStatusSub(InputEvent_t type, StatusPub::SubCallbackFunc func)
     {
-        StatusPub::CreateNewSub(type, func);
+        return StatusPub::CreateNewSub(type, func);
     }
 
-    void NewInputSub(InputPub::SubCallbackFunc func)
+    auto NewInputSub(InputPub::SubCallbackFunc func)
     {
-        InputPub::CreateNewSub(func);
+        return InputPub::CreateNewSub(func);
     }
-    void NewInputSub(InputDevice_t type, InputPub::SubCallbackFunc func)
+    auto NewInputSub(InputDevice_t type, InputPub::SubCallbackFunc func)
     {
-        InputPub::CreateNewSub(type, func);
+        return InputPub::CreateNewSub(type, func);
     }
 
     void NewStatusEvent(StatusMessage message)

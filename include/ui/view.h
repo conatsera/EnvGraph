@@ -151,6 +151,7 @@ class View : public Publisher<ViewMsg, RenderEventBits>
     MESSAGE_HANDLER(WM_POINTERWHEEL, OnPointerWheel)
     MESSAGE_HANDLER(WM_POINTERHWHEEL, OnPointerHWheel)
     MESSAGE_HANDLER(WM_POINTERCAPTURECHANGED, OnPointerCaptureChange)
+    MESSAGE_HANDLER(WM_CHAR, OnRecvChar)
     MESSAGE_HANDLER(WM_ENTERSIZEMOVE, OnEnterSizeMove)
     MESSAGE_HANDLER(WM_EXITSIZEMOVE, OnExitSizeMove)
     MESSAGE_HANDLER(WM_DPICHANGED, OnDpiChange)
@@ -185,6 +186,8 @@ class View : public Publisher<ViewMsg, RenderEventBits>
     LRESULT OnPointerWheel(_In_ UINT, _In_ WPARAM wparam, _In_ LPARAM lparam, _Out_ BOOL &bHandled);
     LRESULT OnPointerHWheel(_In_ UINT, _In_ WPARAM wparam, _In_ LPARAM lparam, _Out_ BOOL &bHandled);
     LRESULT OnPointerCaptureChange(_In_ UINT, _In_ WPARAM wparam, _In_ LPARAM lparam, _Out_ BOOL &bHandled);
+
+    LRESULT OnRecvChar(_In_ UINT, _In_ WPARAM wparam, _In_ LPARAM lparam, _Out_ BOOL &bHandled);
 
     LRESULT OnEnterSizeMove(_In_ UINT, _In_ WPARAM, _In_ LPARAM, _Out_ BOOL &bHandled);
     LRESULT OnExitSizeMove(_In_ UINT, _In_ WPARAM, _In_ LPARAM, _Out_ BOOL &bHandled);
