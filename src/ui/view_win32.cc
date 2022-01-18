@@ -176,12 +176,11 @@ View::OnWindowPosChanged(_In_ UINT, _In_ WPARAM, _In_ LPARAM lparam, _Out_ BOOL 
     if (!(windowPos->flags & SWP_NOSIZE))
     {
         // DeviceResources::Size size;
-        auto width = static_cast<uint32_t>(clientRect.right - clientRect.left) / (m_dpi / 96.0F);
-        auto height = static_cast<uint32_t>(clientRect.bottom - clientRect.top) / (m_dpi / 96.0F);
+        m_windowExtent.x = static_cast<uint32_t>(clientRect.right - clientRect.left) / (m_dpi / 96.0F);
+        m_windowExtent.y = static_cast<uint32_t>(clientRect.bottom - clientRect.top) / (m_dpi / 96.0F);
         // m_deviceResources->SetLogicalSize(size);
         // Render();
-        // TODO: Send resize info
-        NewEvent(ViewMsg(Extent{width, height}));
+        NewEvent(ViewMsg(m_windowExtent, false));
     }
 
     bHandled = TRUE;
@@ -407,6 +406,8 @@ View::OnExitSizeMove(_In_ UINT, _In_ WPARAM, _In_ LPARAM, _Out_ BOOL &bHandled)
 {
     // Call handler implemented by derived class for WindowPosChanging message.
     // OnExitSizeMove();
+
+    NewEvent(ViewMsg(m_windowExtent, true));
 
     bHandled = TRUE;
     return 0;

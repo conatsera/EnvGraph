@@ -62,14 +62,14 @@ template <> struct Pipelines::ComputeInfo<GpuApiSetting::VULKAN>
 
 #endif
 
-// The pipeline is restricted to non-API specific commands and contains various stages defined by the 
+// The pipeline base is limited to non-API specific commands and contains the stages implemented by the 
 // derived class
-class Pipeline
+class Base
 {
   public:
     virtual void Setup(SetupInfo<kGpuApiSetting> setupInfo) = 0;
 
-    virtual void Cleanup() = 0;
+    virtual void Cleanup(SetupInfo<kGpuApiSetting> setupInfo) = 0;
 
     virtual const QueueRequirements_t GetQueueRequirements() const = 0;
 
@@ -102,7 +102,6 @@ class Pipeline
 };
 
 } // namespace Pipelines
-
 } // namespace EnvGraph
 
 #endif

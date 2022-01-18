@@ -58,9 +58,6 @@ void VkSubsystem::DeInit()
 {
     if (m_initialized)
     {
-        for (const auto &framebuffer : m_framebuffers)
-            m_device->destroyFramebuffer(framebuffer);
-
         for (const auto &imageView : m_imageViews)
         {
             m_device->destroyImageView(imageView);
@@ -84,6 +81,10 @@ void VkSubsystem::DeInit()
         m_device->destroyCommandPool(m_presentCommandPool);
 
         m_device->destroySwapchainKHR(m_swapchain);
+
+        // destroySwapchainKHR handles destruction of swapchainImage.image[s]
+        for (auto &swapchainImage : m_swapchainImages)
+            m_device->destroyImageView(swapchainImage.view);
 
         m_instance->destroySurfaceKHR(m_surface);
     }
@@ -140,81 +141,91 @@ void VkSubsystem::Start()
             m_framebuffers[i] = m_device->createFramebuffer(framebufferCI);
         }
 
+        m_busy.release();
         while (m_enabled)
         {
-            vk::CommandBufferAllocateInfo graphicsCommandBufferAI{m_graphicsCommandPool,
-                                                                  vk::CommandBufferLevel::ePrimary, 1};
-
-            vk::UniqueCommandBuffer graphicsCommandBuffer;
-            graphicsCommandBuffer.swap(m_device->allocateCommandBuffersUnique(graphicsCommandBufferAI)[0]);
-
-            graphicsCommandBuffer->begin(vk::CommandBufferBeginInfo{});
-
-            for (auto enginePipeline : m_pipelines)
+            if (m_busy.try_acquire())
             {
-                if (enginePipeline->HasPreRenderStage())
-                    enginePipeline->PreRender({m_device, renderRes});
-            }
+                vk::CommandBufferAllocateInfo graphicsCommandBufferAI{m_graphicsCommandPool,
+                                                                      vk::CommandBufferLevel::ePrimary, 1};
 
-            if (vk::Result::eSuccess == m_device->acquireNextImageKHR(m_swapchain, UINT64_MAX,
-                                                                      imageAcquiredSemaphore.get(), nullptr,
-                                                                      &m_currentFramebuffer))
-            {
-                renderPassBI.framebuffer = m_framebuffers[m_currentFramebuffer];
+                vk::UniqueCommandBuffer graphicsCommandBuffer;
+                graphicsCommandBuffer.swap(m_device->allocateCommandBuffersUnique(graphicsCommandBufferAI)[0]);
 
-                graphicsCommandBuffer->beginRenderPass(renderPassBI, vk::SubpassContents::eInline);
-
-                graphicsCommandBuffer->setViewport(0, viewport);
-
-                graphicsCommandBuffer->setScissor(0, scissor);
+                graphicsCommandBuffer->begin(vk::CommandBufferBeginInfo{});
 
                 for (auto enginePipeline : m_pipelines)
                 {
-                    const Pipelines::QueueRequirements_t queueReqs = enginePipeline->GetQueueRequirements();
-                    if (queueReqs.compute > 0)
-                        enginePipeline->Compute({m_device});
-                    if (queueReqs.graphics > 0)
-                        enginePipeline->Render({m_device, graphicsCommandBuffer, renderRes});
+                    if (enginePipeline->HasPreRenderStage())
+                        enginePipeline->PreRender({m_device, renderRes});
                 }
 
-                graphicsCommandBuffer->endRenderPass();
-
-                graphicsCommandBuffer->end();
-
-                constexpr vk::PipelineStageFlags pipelineStageFlags[1] = {
-                    vk::PipelineStageFlagBits::eColorAttachmentOutput};
-
-                submitInfo = {1,      &(imageAcquiredSemaphore.get()), pipelineStageFlags,
-                              1,      &(graphicsCommandBuffer.get()),  0,
-                              nullptr};
-
-                m_graphicsQueue.submit(submitInfo, graphicsCommandBufferFence.get());
-
-                vk::Result res;
-                do
+                if (vk::Result::eSuccess == m_device->acquireNextImageKHR(m_swapchain, UINT64_MAX,
+                                                                          imageAcquiredSemaphore.get(), nullptr,
+                                                                          &m_currentFramebuffer))
                 {
-                    res = m_device->waitForFences(graphicsCommandBufferFence.get(), VK_TRUE, kFenceTimeout);
-                } while (res == vk::Result::eTimeout);
-                m_device->resetFences(graphicsCommandBufferFence.get());
+                    renderPassBI.framebuffer = m_framebuffers[m_currentFramebuffer];
 
-                present.pSwapchains = &m_swapchain;
-                present.pImageIndices = &m_currentFramebuffer;
+                    graphicsCommandBuffer->beginRenderPass(renderPassBI, vk::SubpassContents::eInline);
 
-                try
-                {
-                    presentResult = m_presentQueue.presentKHR(present);
-                }
-                catch (const vk::OutOfDateKHRError &)
-                {
-                    m_enabled = false;
-                    break;
-                }
+                    graphicsCommandBuffer->setViewport(0, viewport);
 
-                if (presentResult != vk::Result::eSuccess)
-                {
-                    std::cout << "Error: " << vk::to_string(presentResult) << std::endl;
+                    graphicsCommandBuffer->setScissor(0, scissor);
+
+                    for (auto enginePipeline : m_pipelines)
+                    {
+                        const Pipelines::QueueRequirements_t queueReqs = enginePipeline->GetQueueRequirements();
+                        if (queueReqs.compute > 0)
+                            enginePipeline->Compute({m_device});
+                        if (queueReqs.graphics > 0)
+                            enginePipeline->Render({m_device, graphicsCommandBuffer, renderRes});
+                    }
+
+                    graphicsCommandBuffer->endRenderPass();
+
+                    graphicsCommandBuffer->end();
+
+                    constexpr vk::PipelineStageFlags pipelineStageFlags[1] = {
+                        vk::PipelineStageFlagBits::eColorAttachmentOutput};
+
+                    submitInfo = {1,      &(imageAcquiredSemaphore.get()), pipelineStageFlags,
+                                  1,      &(graphicsCommandBuffer.get()),  0,
+                                  nullptr};
+
+                    m_graphicsQueue.submit(submitInfo, graphicsCommandBufferFence.get());
+
+                    vk::Result res;
+                    do
+                    {
+                        res = m_device->waitForFences(graphicsCommandBufferFence.get(), VK_TRUE, kFenceTimeout);
+                    } while (res == vk::Result::eTimeout);
+                    m_device->resetFences(graphicsCommandBufferFence.get());
+
+                    present.pSwapchains = &m_swapchain;
+                    present.pImageIndices = &m_currentFramebuffer;
+
+                    try
+                    {
+                        presentResult = m_presentQueue.presentKHR(present);
+                    }
+                    catch (const vk::OutOfDateKHRError &)
+                    {
+                        m_enabled = false;
+                        m_busy.release();
+                        break;
+                    }
+
+                    if (presentResult != vk::Result::eSuccess)
+                    {
+                        std::cout << "Error: " << vk::to_string(presentResult) << std::endl;
+                    }
+                    m_busy.release();
                 }
             }
+        }
+        for (size_t i = 0; i < m_framebufferCount; i++)
+        {
+            m_device->destroyFramebuffer(m_framebuffers[i]);
         }
     });
 }
@@ -223,7 +234,7 @@ void VkSubsystem::Stop()
 {
 }
 
-void VkSubsystem::NewPipeline(Pipelines::Pipeline *newPipeline)
+void VkSubsystem::NewPipeline(Pipelines::Base *newPipeline)
 {
     newPipeline->Setup({m_device, m_phyDeviceMemProps, m_graphicsQueueFamilyIndex, m_computeQueueFamilyIndex,
                         m_graphicsQueuesMax - m_graphicsQueuesAvailable, m_computeQueuesMax - m_computeQueuesAvailable,
@@ -303,9 +314,22 @@ bool VkSubsystem::CheckRenderResolutionLimits(Extent renderRes) const
            (renderRes.y <= m_phyDeviceProps.limits.maxImageDimension2D);
 }
 
-void UpdateRenderRes()
+void VkSubsystem::UpdateRenderResolution()
 {
+    if (m_busy.try_acquire())
+    {
+        m_enabled = false;
+        m_renderThread.join();
 
+        CreateSwapChain();
+        CreateImageViews();
+        CreateDepthStencil();
+
+        // for (auto &pipeline : m_pipelines)
+        //    pipeline->Resized(m_windowExtents);
+
+        Start();
+    }
 }
 
 bool checkDeviceExtensionSupport(vk::PhysicalDevice phyDev)
@@ -345,7 +369,7 @@ inline bool isPhyDeviceSuitable(vk::PhysicalDevice phyDev, vk::SurfaceKHR &surfa
 
 bool VkSubsystem::InitVulkan()
 {
-    
+
     if (!CreateInstance())
         return false;
 #ifndef NDEBUG
@@ -398,10 +422,9 @@ bool VkSubsystem::InitVulkan()
     }
 }
 
-inline void checked_vector_add(std::vector<char const *> &v, char const * s)
+inline void checked_vector_add(std::vector<char const *> &v, char const *s)
 {
-    if (std::find(v.begin(), v.end(), s) ==
-        v.end())
+    if (std::find(v.begin(), v.end(), s) == v.end())
     {
         v.push_back(s);
     }
@@ -461,7 +484,8 @@ bool VkSubsystem::CreateInstance()
     vk::InstanceCreateInfo instanceCreateInfo({}, &applicationInfo, (uint32_t)enabledLayers.size(),
                                               enabledLayers.data(), (uint32_t)enabledExtensions.size(),
                                               enabledExtensions.data());
-    try {  
+    try
+    {
         m_instance = vk::createInstanceUnique(instanceCreateInfo);
     }
     catch (vk::SystemError &e)
@@ -524,10 +548,11 @@ bool VkSubsystem::SetupDevice()
     deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(kRequiredDeviceExtensions.size());
     deviceCreateInfo.ppEnabledExtensionNames = kRequiredDeviceExtensions.data();
 
-    try {
+    try
+    {
         m_device = m_phyDevice.createDeviceUnique(deviceCreateInfo);
     }
-    catch (vk::SystemError& e)
+    catch (vk::SystemError &e)
     {
         std::cerr << e.what() << std::endl;
         return false;
@@ -577,13 +602,13 @@ bool VkSubsystem::SetupQueues(std::vector<vk::DeviceQueueCreateInfo> &queueCreat
         return false;
     }
 
-    //float controlQueuePriority = 1.0F;
-    //float otherQueuePriority = 1.0F / m_graphicsQueuesAvailable;
+    // float controlQueuePriority = 1.0F;
+    // float otherQueuePriority = 1.0F / m_graphicsQueuesAvailable;
     float queuePriority = 1.0F;
 
     float *graphicsQueuePriorities = (float *)malloc(sizeof(float) * m_graphicsQueuesAvailable);
 
-    //graphicsQueuePriorities[0] = queuePriority;
+    // graphicsQueuePriorities[0] = queuePriority;
     for (uint32_t i = 0; i < m_graphicsQueuesAvailable; i++)
         graphicsQueuePriorities[i] = queuePriority;
 
@@ -630,17 +655,18 @@ void VkSubsystem::ChooseSwapChainExtent()
 
     if (caps.currentExtent.width != UINT32_MAX)
     {
-        m_parentEngine->SetRenderResolution({caps.currentExtent.width, caps.currentExtent.height});
+        m_parentEngine->SetRenderResolution({caps.currentExtent.width, caps.currentExtent.height}, true);
     }
     else
     {
-        // If the surface extent wasn't already set (by SDL, for example), retrieve the extents of the view and resize the surface
+        // If the surface extent wasn't already set (by SDL, for example), retrieve the extents of the view and resize
+        // the surface
         Extent actualExtent = m_parentEngine->GetView()->GetExtent();
 
         actualExtent.x = std::max(caps.minImageExtent.width, std::min(caps.maxImageExtent.width, actualExtent.x));
         actualExtent.y = std::max(caps.minImageExtent.height, std::min(caps.maxImageExtent.height, actualExtent.y));
 
-        m_parentEngine->SetRenderResolution(actualExtent);
+        m_parentEngine->SetRenderResolution(actualExtent, true);
     }
 }
 
@@ -684,14 +710,20 @@ bool VkSubsystem::CreateSwapChain()
 
     swapchainCreateInfo.oldSwapchain = m_swapchain;
 
-    try {
+    try
+    {
         m_swapchain = m_device->createSwapchainKHR(swapchainCreateInfo);
     }
-    catch (vk::SystemError& e)
+    catch (vk::SystemError &e)
     {
         std::cerr << e.what() << std::endl;
         return false;
     }
+
+    m_device->destroySwapchainKHR(swapchainCreateInfo.oldSwapchain);
+
+    for (auto &swapchainImage : m_swapchainImages)
+        m_device->destroyImageView(swapchainImage.view);
 
     m_swapchainImages.clear();
     auto swapchainImages = m_device->getSwapchainImagesKHR(m_swapchain);
@@ -700,14 +732,16 @@ bool VkSubsystem::CreateSwapChain()
 
     m_framebufferCount = m_swapchainImages.size();
 
-    m_framebuffers = std::vector<vk::Framebuffer>(m_framebufferCount);
+    m_framebuffers.clear();
+
+    m_framebuffers.resize(m_framebufferCount);
 
     return true;
 }
 
 void VkSubsystem::CreateImageViews()
 {
-    m_imageViews.resize(m_swapchainImages.size());
+    // m_imageViews.resize(m_swapchainImages.size());
 
     for (auto &swapchainImage : m_swapchainImages)
     {
@@ -719,7 +753,7 @@ void VkSubsystem::CreateImageViews()
                                  /*a*/ vk::ComponentSwizzle::eIdentity),
             vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
         swapchainImage.view = m_device->createImageView(imageViewCreateInfo);
-        m_imageViews.push_back(swapchainImage.view);
+        // m_imageViews.push_back(swapchainImage.view);
     }
 }
 
@@ -736,6 +770,12 @@ void VkSubsystem::CreateDepthStencil()
                                                     vk::SampleCountFlagBits::e1,
                                                     vk::ImageTiling::eOptimal,
                                                     vk::ImageUsageFlagBits::eDepthStencilAttachment};
+
+    if (m_depthImage)
+    {
+        m_device->destroyImage(m_depthImage);
+        m_device->destroyImageView(m_depthImageView);
+    }
 
     m_depthImage = m_device->createImage(depthStencilImageCreateInfo);
 

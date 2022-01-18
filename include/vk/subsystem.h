@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <thread>
+#include <semaphore>
 
 #include <vulkan/vulkan.hpp>
 
@@ -45,7 +46,7 @@ class GraphicsSubsystem<GpuApiSetting::VULKAN>
     void Start();
     void Stop();
 
-    void NewPipeline(Pipelines::Pipeline *newPipeline);
+    void NewPipeline(Pipelines::Base *newPipeline);
 
     void EnableRenderPass();
     void DisableRenderPass();
@@ -53,22 +54,7 @@ class GraphicsSubsystem<GpuApiSetting::VULKAN>
     void DisableComputePass();
 
     bool CheckRenderResolutionLimits(Extent renderRes) const;
-    void UpdateRenderResolution() {
-        if (m_enabled)
-        {
-            m_enabled = false;
-            m_renderThread.join();
-
-            CreateSwapChain();
-            CreateImageViews();
-            CreateDepthStencil();
-
-            // for (auto &pipeline : m_pipelines)
-            //    pipeline->Resized(m_windowExtents);
-
-            Start();
-        }
-    };
+    void UpdateRenderResolution();
 
   private:
     bool InitVulkan();
@@ -95,6 +81,7 @@ class GraphicsSubsystem<GpuApiSetting::VULKAN>
     Engine *m_parentEngine = nullptr;
     bool m_initialized = false;
     bool m_enabled = false;
+    std::binary_semaphore m_busy{0};
     std::thread m_renderThread;
 
     std::vector<std::string> m_extraInstanceLayers{};
@@ -153,7 +140,7 @@ class GraphicsSubsystem<GpuApiSetting::VULKAN>
 
     vk::UniqueRenderPass m_renderPass;
 
-    std::vector<Pipelines::Pipeline *> m_pipelines;
+    std::vector<Pipelines::Base *> m_pipelines;
 };
 
 } // namespace EnvGraph

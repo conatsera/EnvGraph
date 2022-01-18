@@ -45,7 +45,8 @@ struct ViewMsg : Message
     ViewMsg(RenderEventBits type) : Message(Events::RENDER, type)
     {
     }
-    ViewMsg(Extent newExtent) : Message(Events::RENDER, RenderEventBits::RESIZE), m_newExtent(newExtent)
+    ViewMsg(Extent newExtent, bool end)
+        : Message(Events::RENDER, RenderEventBits::RESIZE), m_newExtent(newExtent), m_resizeEnd(end)
     {
     }
     ViewMsg(bool hidden) : Message(Events::RENDER, RenderEventBits::VISIBILITY), m_hidden(hidden)
@@ -53,6 +54,7 @@ struct ViewMsg : Message
     }
     const bool m_hidden = false;
     const Extent m_newExtent{0, 0};
+    const bool m_resizeEnd = false;
     /*constexpr ViewMsg &operator=(ViewMsg &rhs) noexcept {
         m_hidden = rhs.m_hidden;
         for (size_t i = 0; i < rhs.m_newExtent.length(); i++)
@@ -130,6 +132,7 @@ class View : public Publisher<ViewMsg, RenderEventBits>
     bool m_visible;
     std::string m_title{""};
     float m_dpi = 96.0F;
+    Extent m_windowExtent;
 
   private:
     void Pause();

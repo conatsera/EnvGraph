@@ -5,14 +5,14 @@
 
 using namespace EnvGraph;
 
-class MockPipeline : public Pipelines::Pipeline
+class MockPipeline : public Pipelines::Base
 {
   public:
     void Setup(Pipelines::SetupInfo<kGpuApiSetting> setupInfo) final
     {
         m_setupComplete = true;
     }
-    void Cleanup() final
+    void Cleanup(Pipelines::SetupInfo<kGpuApiSetting>) final
     {
     }
 
@@ -40,14 +40,14 @@ class MockPipeline : public Pipelines::Pipeline
     bool m_resourcesEnabled = false;
 };
 
-class MockPipelineTwoStage : public Pipelines::Pipeline
+class MockPipelineTwoStage : public Pipelines::Base
 {
   public:
     void Setup(Pipelines::SetupInfo<kGpuApiSetting> setupInfo) final
     {
         m_setupComplete = true;
     }
-    void Cleanup() final
+    void Cleanup(Pipelines::SetupInfo<kGpuApiSetting>) final
     {
     }
 

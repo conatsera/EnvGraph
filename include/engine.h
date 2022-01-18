@@ -52,7 +52,7 @@ class Engine : public Publisher<EngineEvent, EngineEventBits, 64>
 
     bool Init();
 
-    void UpdateWindowExtents(uint32_t width, uint32_t height)
+    void UpdateWindowExtents(uint32_t width, uint32_t height, bool end)
     {
 
     }
@@ -64,7 +64,7 @@ class Engine : public Publisher<EngineEvent, EngineEventBits, 64>
     void PauseRender();
     void StopRender();
 
-    void NewPipeline(Pipelines::Pipeline* newPipeline);
+    void NewPipeline(Pipelines::Base* newPipeline);
 
     std::string GetAppName() const
     {
@@ -80,12 +80,13 @@ class Engine : public Publisher<EngineEvent, EngineEventBits, 64>
     {
         return m_renderResolution;
     }
-    bool SetRenderResolution(Extent newRenderResolution)
+    bool SetRenderResolution(Extent newRenderResolution, bool end)
     {
         if (m_graphicsSubsystem.CheckRenderResolutionLimits(newRenderResolution))
         {
             m_renderResolution = newRenderResolution;
-            m_graphicsSubsystem.UpdateRenderResolution();
+            if (end)
+                m_graphicsSubsystem.UpdateRenderResolution();
             return true;
         }
         else
@@ -98,12 +99,13 @@ class Engine : public Publisher<EngineEvent, EngineEventBits, 64>
     std::mutex m_rendererActive;
 
     Extent m_renderResolution{0, 0};
+    Subscriber<std::function<void(UI::ViewMsg)>, RenderEventBits> *m_resizeSub;
 
     GraphicsSubsystem<kGpuApiSetting> m_graphicsSubsystem;
 
     std::shared_ptr<UI::View> m_view;
 
-    std::vector<Pipelines::Pipeline*> m_pipelines;
+    std::vector<Pipelines::Base*> m_pipelines;
 };
 
 } // namespace EnvGraph

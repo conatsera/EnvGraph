@@ -7,11 +7,11 @@ namespace EnvGraph
 
 Engine::Engine(std::string appName) : m_appName(appName)
 {
-
 }
 
 Engine::~Engine()
 {
+    m_resizeSub->End();
 }
 
 void Engine::ConfigureView(std::shared_ptr<UI::View> view)
@@ -19,8 +19,8 @@ void Engine::ConfigureView(std::shared_ptr<UI::View> view)
     if (view)
     {
         m_view = view;
-        m_view->CreateNewSub(RenderEventBits::RESIZE,
-            [this](UI::ViewMsg e) { SetRenderResolution(e.m_newExtent); });
+        m_resizeSub = m_view->CreateNewSub(
+            RenderEventBits::RESIZE, [this](UI::ViewMsg e) { SetRenderResolution(e.m_newExtent, e.m_resizeEnd); });
     }
     else
     {
@@ -50,12 +50,11 @@ void Engine::StartRender()
     m_graphicsSubsystem.Start();
 }
 
-void Engine::NewPipeline(Pipelines::Pipeline *newPipeline)
+void Engine::NewPipeline(Pipelines::Base *newPipeline)
 {
     m_graphicsSubsystem.NewPipeline(newPipeline);
     m_pipelines.push_back(newPipeline);
 }
-
 
 void Engine::StopRender()
 {
