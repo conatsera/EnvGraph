@@ -1,5 +1,7 @@
-build/
-.vscode/
-.vs/
-out/
+.vs
+vc140.pdb
 CMakeSettings.json
+.vscode
+
+out
+build

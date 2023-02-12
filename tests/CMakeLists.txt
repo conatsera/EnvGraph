@@ -1,21 +1,16 @@
-include(GoogleTest)
+enable_testing()
 
-add_compile_definitions(TEST_DEFAULT_WIDTH=512 TEST_DEFAULT_HEIGHT=512)
+set(TESTS "log" "engine" "pubsub")
+set(TEST_SOURCES "")
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/test/bin")
+foreach(TEST IN LISTS TESTS)
+	list(APPEND TEST_SOURCES "${TEST}-ut.cc")
 
-add_subdirectory(events)
+	add_executable("test-${TEST}" "${TEST}-ut.cc")
+	target_link_libraries("test-${TEST}" PRIVATE gtest_main engine)
+	target_include_directories("test-${TEST}" PUBLIC "../extern/googletest/googletest/include")
+endforeach()
 
-add_subdirectory(ui)
-
-add_subdirectory(engine)
-
-add_subdirectory(depth)
-
-if (WIN32)
-
-	find_file(SDL_DLL SDL2.dll HINTS "$ENV{VULKAN_SDK}/Third-Party/Bin")
-
-	file(COPY ${SDL_DLL} DESTINATION "${PROJECT_BINARY_DIR}/test/bin")
-
-endif()
+add_executable("test-all" ${TEST_SOURCES})
+target_link_libraries("test-all" PRIVATE gtest_main engine)
+target_include_directories("test-all" PUBLIC "../extern/googletest/googletest/include")
