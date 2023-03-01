@@ -2,7 +2,7 @@
 
 project ("EnvGraph" VERSION 0.2 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_DYNDEP 1)
@@ -64,18 +64,82 @@ endif()
 
 add_subdirectory(extern)
 
-#add_subdirectory(interfaces)
 add_library(engine)
 target_sources(engine
     PUBLIC
       FILE_SET public_modules TYPE CXX_MODULES FILES
         interfaces/engine/pubsub.ixx
+		interfaces/engine/asset.ixx
         interfaces/engine/engine.ixx
         interfaces/engine/log.ixx
         interfaces/engine/pipeline.ixx
         interfaces/engine/platform.ixx
         interfaces/engine/platforms/dx12.ixx
         interfaces/engine/platforms/windows.ixx
+)
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+file(COPY "$ENV{VCToolsInstallDir}/modules/std.compat.ixx" "$ENV{VCToolsInstallDir}/modules/std.ixx" DESTINATION ${CMAKE_BINARY_DIR})
+add_library(std_lib)
+target_sources(std_lib
+    PUBLIC
+      FILE_SET public_modules TYPE CXX_MODULES FILES
+		${CMAKE_BINARY_DIR}/std.ixx
+		${CMAKE_BINARY_DIR}/std.compat.ixx
+)
+endif()
+
+target_link_libraries(engine PRIVATE std_lib)
+
+find_package(OpenSSL)
+if (NOT ${OPENSSL_FOUND})
+    set(OPENSSL_ROOT_DIR ./extern/openssl/install)
+    find_package(OpenSSL)
+    if (NOT ${OPENSSL_FOUND})
+		add_custom_target(openssl-build DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/openssl/install/lib/libcrypto.lib)
+        add_dependencies(engine openssl-build)
+		set(OPENSSL_INCLUDE_DIR ./extern/openssl/install/include)
+    endif()
+endif()
+
+file(GLOB SCHEMA_FILES LIST_DIRECTORIES FALSE asset_schemas/*.fbs)
+
+set(SCHEMA_OUTPUT_FILES ${SCHEMA_FILES})
+
+list(TRANSFORM SCHEMA_OUTPUT_FILES REPLACE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+list(TRANSFORM SCHEMA_OUTPUT_FILES REPLACE "\.fbs$" "_generated.h")
+
+add_custom_command(
+    OUTPUT
+        ${SCHEMA_OUTPUT_FILES}
+    COMMAND ${CMAKE_BINARY_DIR}/extern/flatbuffers-build/flatc.exe
+    ARGS    --cpp --gen-mutable --gen-object-api --reflect-names
+			--cpp-ptr-type std::unique_ptr
+			-o ${CMAKE_BINARY_DIR}/asset_schemas
+			${SCHEMA_FILES}
+    VERBATIM
+	DEPENDS flatc ${SCHEMA_FILES}
+)
+
+add_custom_target(asset-schema-build DEPENDS ${SCHEMA_OUTPUT_FILES})
+add_dependencies(engine asset-schema-build libvips-build)
+
+target_include_directories(engine
+	PRIVATE
+		${OPENSSL_INCLUDE_DIR}
+		${CMAKE_BINARY_DIR}/asset_schemas
+		${CMAKE_SOURCE_DIR}/extern/flatbuffers/include
+		${LIBVIPS_INCLUDE_DIRS}
+)
+
+target_link_directories(engine PUBLIC ${LIBVIPS_DEV_ROOT}/lib)
+target_link_libraries(engine
+	PRIVATE
+		OpenSSL::Crypto OpenSSL::SSL
+		flatbuffers
+		${LIBVIPS_LIBRARIES}
+		${LIBVIPS_DEV_ROOT}/lib/libintl.a
+		${LIBVIPS_DEV_ROOT}/lib/libvips-cpp.dll.a
 )
 
 if(CUFFT_FFT_BACKEND)

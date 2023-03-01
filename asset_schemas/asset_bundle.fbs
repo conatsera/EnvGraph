@@ -1,0 +1,53 @@
+namespace EnvGraph.Asset.Buffer;
+
+struct Vertice {
+	x:float32;
+	y:float32;
+	z:float32;
+}
+
+struct Color {
+	r:uint16;
+	g:uint16;
+	b:uint16;
+	a:uint16;
+}
+
+table Bitmap {
+	bytes:[ubyte];
+}
+
+table Texture {
+	name:string (required);
+
+	width:uint;
+	height:uint;
+	mip_lvls:uint = 1;
+
+	bitmaps:[Bitmap] (required);
+}
+
+table Material {
+	name:string (required);
+
+	vert_shader:string (required);
+	frag_shader:string;
+
+	texture_index:uint;
+}
+
+table Mesh {
+	name:string (required);
+
+	obj:[ubyte] (required);
+
+	material_index:uint;
+}
+
+table Bundle {
+	textures:[Texture] (required);
+	materials:[Material] (required);
+	meshes:[Mesh] (required);
+}
+
+root_type Bundle;

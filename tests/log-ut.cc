@@ -6,38 +6,39 @@ import log;
 
 #include "gtest/gtest.h"
 
-namespace {
-TEST(LogTest, InitConsoleLog) {
-	auto logger = EnvGraph::Logger("", "");
+namespace
+{
+TEST(LogTest, InitConsoleLog)
+{
+    auto logger = EnvGraph::Logger();
 
-	if (logger.Init(true))
-		logger.Log("test");
-	else
-		FAIL();
+    ASSERT_EQ(logger.Init(true), true);
 }
 
-TEST(LogTest, InitFileLog) {
-	auto logger = EnvGraph::Logger("", "");
-	auto current_path = std::filesystem::current_path().append("logs");
+TEST(LogTest, InitFileLog)
+{
+    auto logger = EnvGraph::Logger();
+    auto current_path = std::filesystem::current_path().append("logs");
 
-	EXPECT_EQ(logger.Init(false, current_path), true);
+    EXPECT_EQ(logger.Init(false, current_path), true);
 }
 
-TEST(LogTest, TestFileLog) {
-	std::filesystem::path logFilePath;
-	{
-		auto logger = EnvGraph::Logger("", "");
-		auto current_path = std::filesystem::current_path().append("logs");
+TEST(LogTest, TestFileLog)
+{
+    std::filesystem::path logFilePath;
+    {
+        auto logger = EnvGraph::Logger();
+        auto current_path = std::filesystem::current_path().append("logs");
 
-		EXPECT_EQ(logger.Init(false, current_path), true);
+        EXPECT_EQ(logger.Init(false, current_path), true);
 
-		logger.Log("test file log");
-		logFilePath = logger.GetLogFilePath();
-	}
+        logger.Log("test file log");
+        logFilePath = logger.GetLogFilePath();
+    }
 
-	std::string logFileContents;
-	std::getline(std::ifstream(logFilePath), logFileContents);
-	
-	EXPECT_EQ(true, logFileContents.ends_with("test file log"));
+    std::string logFileContents;
+    std::getline(std::ifstream(logFilePath), logFileContents);
+
+    EXPECT_EQ(true, logFileContents.ends_with("test file log"));
 }
-}
+} // namespace

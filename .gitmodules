@@ -1,3 +1,18 @@
 [submodule "extern/googletest"]
 	path = extern/googletest
 	url = https://github.com/google/googletest.git
+[submodule "extern/DirectX-Headers"]
+	path = extern/DirectX-Headers
+	url = https://github.com/microsoft/DirectX-Headers.git
+[submodule "extern/DirectXMath"]
+	path = extern/DirectXMath
+	url = https://github.com/microsoft/DirectXMath.git
+[submodule "extern/openssl"]
+	path = extern/openssl
+	url = https://github.com/openssl/openssl.git
+[submodule "extern/flatbuffers"]
+	path = extern/flatbuffers
+	url = https://github.com/google/flatbuffers.git
+[submodule "extern/libvips"]
+	path = extern/libvips
+	url = https://github.com/libvips/libvips

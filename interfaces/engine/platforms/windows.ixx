@@ -1,10 +1,12 @@
 module;
 
-#include <array>
+//#include <array>
 
 #define NOMINMAX
 #include <Windows.h>
 export module windows;
+
+import std.compat;
 
 import platform;
 import pubsub;
@@ -17,8 +19,18 @@ namespace EnvGraph {
 				return false;
 			}
 
-			auto Deinit() -> void {
+			Engine::RunFunctor Run() {
+				return []() -> bool {
+					return false;
+				};
+			}
 
+			void Destroy() {
+
+			}
+
+			Engine::PlatformState GetState() {
+				return m_platformState;
 			}
 
 			auto GetWindowHandle() const -> HWND {
@@ -43,6 +55,7 @@ namespace EnvGraph {
 //			auto GetMessagePublisher() -> Publisher<Engine::WindowMessage, Engine::WindowMessageFilter> {};
 
 		private:
+			Engine::PlatformState m_platformState = Engine::PlatformState::Offline;
 			HWND m_window;
 
 			static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -50,8 +63,4 @@ namespace EnvGraph {
 
 		};
 	}
-
-	export class AudioIO {
-
-	};
 }

@@ -1,5 +1,5 @@
 module;
-
+/*
 #include <chrono>
 #include <functional>
 #include <string>
@@ -9,8 +9,11 @@ module;
 #include <iostream>
 #include <fstream>
 #include <sstream>
-
+#include <locale>
+*/
 export module log;
+
+import std.compat;
 
 namespace EnvGraph {
 
@@ -19,13 +22,10 @@ typedef struct _Log_t {
 	std::function<std::string()> logEntryFn;
 } Log_t;
 
-export class Logger {
-public:
-	Logger(
-		std::string launch_args,
-		std::string launch_config_file) :
-			m_launch_args(launch_args),
-			m_launch_config_file(launch_config_file) {};
+export class Logger
+{
+  public:
+    Logger() {};
 	~Logger() {
 		m_logThread.request_stop();
 		m_logThread.join();
@@ -38,7 +38,7 @@ public:
 
 	bool Init(bool stdOutEnabled = false, std::filesystem::path logPath = "") {
 		m_stdOutEnabled = stdOutEnabled;
-		if (!logPath.empty())
+        if (!logPath.empty())
 		{
 			if (!std::filesystem::exists(logPath.parent_path()))
 				std::filesystem::create_directory(logPath.parent_path());
@@ -46,10 +46,13 @@ public:
 				std::filesystem::create_directory(logPath);
 
 			std::stringstream logFileName("");
-			const auto now_ts = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-			const auto time = std::localtime(&now_ts);
+			const auto now_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            const auto now_tm = *std::localtime(&now_time);
 
-			logFileName << std::put_time(time, "%F_%H-%M-%S") << ".log";
+			char timeString[std::size("yyyy-mm-dd_hh-mm-ss")];
+            std::strftime(timeString, std::size(timeString), "%F_%H-%M-%S", &now_tm);
+
+			logFileName << timeString << ".log";
 
 			const auto logFilePath = logPath.append(logFileName.str());
 			m_logFilePath = logFilePath;
@@ -59,8 +62,11 @@ public:
 		}
 		m_logQueue = std::queue<Log_t>();
 		m_logThread = std::jthread([&](std::stop_token logStop) {
-			std::stringstream logSS("");
-			auto sleepExp = 0;
+			while (!logStop.stop_requested()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			}
+            std::stringstream logSS("");
+			int sleepExp = 0;
 			while (!logStop.stop_requested() || !m_logQueue.empty()) {
 				if (!m_logQueue.empty()) {
 					sleepExp = 0;
@@ -73,11 +79,13 @@ public:
 
 					const auto milliseconds = log.logTime.time_since_epoch().count() % 1000;
 					const auto time = std::chrono::system_clock::to_time_t(log.logTime);
-					const auto _tm = std::localtime(&time);
+					const auto _tm = *std::localtime(&time);
+
+					char timeString[std::size("yyyy-mm-dd hh:mm:ss")];
+                    std::strftime(timeString, std::size(timeString), "%F %T", &_tm);
 
 					logSS.str("");
-					logSS << std::put_time(_tm, "%F %T") << "." << std::setw(3) << std::setfill('0') << milliseconds << " : " << log.logEntryFn() << std::endl;
-
+                    logSS << timeString << "." << milliseconds << " : " << log.logEntryFn() << std::endl;
 					if (m_stdOutEnabled)
 						std::cout << logSS.str();
 					if (m_logFileStream.is_open())
@@ -216,8 +224,6 @@ private:
 	}
 
 private:
-	const std::string m_launch_args;
-	const std::string m_launch_config_file;
 	std::filesystem::path m_logFilePath{""};
 
 	bool              m_stdOutEnabled = false;

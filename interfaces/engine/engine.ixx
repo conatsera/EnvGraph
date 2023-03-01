@@ -1,5 +1,10 @@
+module;
+
 export module engine;
 
+import std.compat;
+
+import log;
 import platform;
 import windows;
 import dx12;
@@ -7,29 +12,48 @@ import dx12;
 namespace EnvGraph {
 namespace Engine {
 
-template<CWindowPlatform TWindowPlatform, CGPUPlatform TGPUPlatform>
+enum class EngineMode {
+	Recovery,
+	Test,
+	Main
+};
+
+struct Recovery {
+
+	void ChangeMode(EngineMode mode);
+};
+
+template<EngineMode kEngineMode, CWindowPlatform TWindowPlatform, CGPUPlatform TGPUPlatform>
 class EngineImpl {
 public:
 	EngineImpl() {};
 	~EngineImpl() {};
 
-	bool Init();
-
+	bool Init() {
+        //auto current_path = std::filesystem::current_path().append("logs");
+        m_logger.Init(true, "./logs");
+        return false;
+	}
 	void Start();
 	void Stop();
 
 	void Pause();
 
 private:
-	TGPUPlatform m_gpuPlatforms;
+	Recovery m_recovery;
+	TGPUPlatform m_gpuPlatform;
+    TWindowPlatform m_windowPlatform;
 
-
+	Logger m_logger;
 };
 
 #if _WIN32
-using DirectXEngine = EngineImpl<Windows::WindowPlatform, Windows::DirectXPlatform>;
+template<EngineMode mode>
+using DirectXEngine = EngineImpl<mode, Windows::WindowPlatform, Windows::DirectXGPUPlatform>;
 //using VulkanEngine =  EngineImpl<Windows::WindowPlatform, VulkanPlatform>;
-export using Engine = DirectXEngine;
+export using MainEngine = DirectXEngine<EngineMode::Main>;
+export using RecoveryEngine = DirectXEngine<EngineMode::Recovery>;
+export using TestEngine = DirectXEngine<EngineMode::Test>;
 #elif _UNIX
 export using Engine = EngineImpl<>;
 #endif
