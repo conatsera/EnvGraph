@@ -1,5 +1,3 @@
-build/
-.vscode/
-.vs/
-out/
-CMakeSettings.json
+target
+Cargo.lock
+.vscode
