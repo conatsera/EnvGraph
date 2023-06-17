@@ -5,12 +5,13 @@ use vulkano::command_buffer::allocator::{
     StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo,
 };
 use vulkano::command_buffer::CommandBufferExecFuture;
+use vulkano::descriptor_set::allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator};
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::device::{
     Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo, QueueFlags,
 };
 use vulkano::image::view::ImageView;
-use vulkano::image::{ImageUsage, SwapchainImage};
+use vulkano::image::{AttachmentImage, ImageAccess, ImageUsage, SwapchainImage};
 use vulkano::instance::Instance;
 use vulkano::memory::allocator::{
     FreeListAllocator, GenericMemoryAllocator, StandardMemoryAllocator,
@@ -42,6 +43,7 @@ pub struct RendererContext {
 
     mem_alloc: GenericMemoryAllocator<Arc<FreeListAllocator>>,
     cmd_buf_alloc: StandardCommandBufferAllocator,
+    desc_set_alloc: StandardDescriptorSetAllocator,
 }
 
 pub trait Renderer {
@@ -63,16 +65,18 @@ fn get_render_pass(device: Arc<Device>, swapchain: &Arc<Swapchain>) -> Arc<Rende
         device,
         attachments: {
             color: {
-                load: Clear,
+                load: DontCare,
                 store: Store,
                 format: swapchain.image_format(),
                 samples: 1,
             },
         },
-        pass: {
-            color: [color],
-            depth_stencil: {},
-        },
+        pass:
+            {
+                color: [color],
+                depth_stencil: {},
+            },
+
     )
     .unwrap()
 }
@@ -80,6 +84,7 @@ fn get_render_pass(device: Arc<Device>, swapchain: &Arc<Swapchain>) -> Arc<Rende
 fn create_framebuffers(
     images: &[Arc<SwapchainImage>],
     render_pass: &Arc<RenderPass>,
+    mem_alloc: &StandardMemoryAllocator,
 ) -> Vec<Arc<Framebuffer>> {
     images
         .iter()
@@ -175,14 +180,15 @@ impl RendererContext {
             .unwrap()
         };
 
-        let render_pass = get_render_pass(device.clone(), &swapchain);
-        let framebuffers = create_framebuffers(&images, &render_pass);
-
         let mem_alloc = StandardMemoryAllocator::new_default(device.clone());
         let cmd_buf_alloc = StandardCommandBufferAllocator::new(
             device.clone(),
             StandardCommandBufferAllocatorCreateInfo::default(),
         );
+        let desc_set_alloc = StandardDescriptorSetAllocator::new(device.clone());
+
+        let render_pass = get_render_pass(device.clone(), &swapchain);
+        let framebuffers = create_framebuffers(&images, &render_pass, &mem_alloc);
 
         let viewport = Viewport {
             origin: [0.0, 0.0],
@@ -204,6 +210,7 @@ impl RendererContext {
 
             mem_alloc,
             cmd_buf_alloc,
+            desc_set_alloc,
         }
     }
 
@@ -218,7 +225,7 @@ impl RendererContext {
         };
         self.swapchain = new_swapchain;
 
-        let new_framebuffers = create_framebuffers(&new_images, &self.render_pass);
+        let new_framebuffers = create_framebuffers(&new_images, &self.render_pass, &self.mem_alloc);
 
         self.framebuffers = new_framebuffers;
     }
@@ -262,6 +269,10 @@ impl RendererContext {
 
     pub fn get_mem_alloc(&self) -> &GenericMemoryAllocator<Arc<FreeListAllocator>> {
         &self.mem_alloc
+    }
+
+    pub fn get_desc_set_alloc(&self) -> &StandardDescriptorSetAllocator {
+        &self.desc_set_alloc
     }
 
     pub fn get_framebuffer_count(&self) -> usize {

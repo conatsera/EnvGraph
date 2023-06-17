@@ -3,14 +3,16 @@ use std::sync::Arc;
 use vulkano::{
     buffer::{BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferExecFuture, CommandBufferUsage,
-        PrimaryAutoCommandBuffer, PrimaryCommandBufferAbstract, RenderPassBeginInfo,
-        SubpassContents,
+        AutoCommandBufferBuilder, ClearAttachment, ClearColorImageInfo, ClearRect,
+        CommandBufferExecFuture, CommandBufferUsage, PrimaryAutoCommandBuffer,
+        PrimaryCommandBufferAbstract, RenderPassBeginInfo, SubpassContents,
     },
     device::Queue,
+    format::ClearValue,
     memory::allocator::{AllocationCreateInfo, MemoryUsage},
     pipeline::{
         graphics::{
+            color_blend::ColorBlendState,
             input_assembly::{InputAssemblyState, PrimitiveTopology},
             rasterization::RasterizationState,
             vertex_input::Vertex,
@@ -271,7 +273,8 @@ fn create_page_cmd_bufs(
             builder
                 .begin_render_pass(
                     RenderPassBeginInfo {
-                        clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())],
+                        //clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())],
+                        clear_values: vec![None],
                         ..RenderPassBeginInfo::framebuffer(fb.clone())
                     },
                     SubpassContents::Inline,
@@ -324,7 +327,8 @@ impl Page {
                 builder
                     .begin_render_pass(
                         RenderPassBeginInfo {
-                            clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())],
+                            //clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())],
+                            clear_values: vec![None],
                             ..RenderPassBeginInfo::framebuffer(fb.clone())
                         },
                         SubpassContents::Inline,
@@ -333,6 +337,18 @@ impl Page {
 
                 builder
                     .bind_pipeline_graphics(self.grid_graphics_pipeline.clone())
+                    .clear_attachments(
+                        [ClearAttachment::Color {
+                            color_attachment: 0,
+                            clear_value: [0.0, 0.0, 0.0, 1.0].into(),
+                        }],
+                        [ClearRect {
+                            offset: [0, 0],
+                            extent: fb.extent(),
+                            array_layers: 0..1,
+                        }],
+                    )
+                    .unwrap()
                     .bind_vertex_buffers(0, self.grid_vert_buffer.clone())
                     .push_constants(
                         self.grid_graphics_pipeline.layout().clone(),

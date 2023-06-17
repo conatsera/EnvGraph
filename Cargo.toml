@@ -11,7 +11,7 @@ opt-level=1
 
 [dependencies]
 ab_glyph = "0.2.21"
-glam = "0.24.0"
+glam = { version = "0.24.0", features = ["bytemuck"] }
 image = "0.24"
 vulkano = "0.33"
 vulkano-win = "0.33"

@@ -1,27 +1,30 @@
-use std::{sync::Arc, borrow::BorrowMut};
+use std::{borrow::BorrowMut, sync::Arc};
 
 use ab_glyph::{point, Font, FontRef, Glyph, PxScale, ScaleFont};
-use glam::Quat;
-use image::{DynamicImage, ImageBuffer, Rgba, GenericImage};
+use glam::{Mat4, Quat};
+use image::{DynamicImage, EncodableLayout, GenericImage, ImageBuffer, Rgba};
 use vulkano::{
     buffer::{BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer,
         PrimaryCommandBufferAbstract, RenderPassBeginInfo,
     },
+    descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet},
     device::Queue,
-    image::ImmutableImage,
+    image::{view::ImageView, ImmutableImage},
     memory::allocator::{AllocationCreateInfo, MemoryUsage},
     pipeline::{
         graphics::{
+            color_blend::ColorBlendState,
             input_assembly::{self, Index, InputAssemblyState, PrimitiveTopology},
             rasterization::RasterizationState,
             vertex_input::Vertex,
             viewport::ViewportState,
         },
-        GraphicsPipeline,
+        GraphicsPipeline, Pipeline, PipelineLayout,
     },
     render_pass::Subpass,
+    sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo, SamplerMipmapMode},
     shader::ShaderModule,
     sync::GpuFuture,
 };
@@ -49,25 +52,21 @@ mod page_text_frag_shader {
 #[repr(C)]
 pub struct TextQuadVert {
     #[format(R32G32_SFLOAT)]
-    position: [f32; 2],
+    v_position: [f32; 2],
     #[format(R8G8B8A8_UNORM)]
-    color: [u8; 4],
-    #[format(R8G8_UNORM)]
-    uv: [u8; 2],
-}
-
-pub struct TextObject {
-    instance: u16,
-    plane: TextPlane,
+    v_color: [u8; 4],
+    #[format(R32G32_SFLOAT)]
+    v_uv: [f32; 2],
 }
 
 #[derive(Copy, Clone, BufferContents)]
 #[repr(C)]
-pub struct TextPlane {
-    rotation: [f32; 4],
-    position: [f32; 3],
-    scale: [f32; 3],
-    texture_index: u32,
+pub struct UBO {
+    mvp: Mat4,
+}
+
+pub struct TextObject {
+    verts: Vec<TextQuadVert>,
 }
 
 pub struct TextRenderer {
@@ -75,23 +74,23 @@ pub struct TextRenderer {
     text_graphics_pipeline: Arc<GraphicsPipeline>,
     command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
 
-    text_objects: Vec<TextObject>,
-    text_objects_buffer: Subbuffer<[TextPlane]>,
-    text_index_buffer: Subbuffer<[u16]>,
+    text_mvp_set: Arc<PersistentDescriptorSet>,
+    text_font_set: Arc<PersistentDescriptorSet>,
     text_vert_buffer: Subbuffer<[TextQuadVert]>,
     text_vert_shader: Arc<ShaderModule>,
     text_frag_shader: Arc<ShaderModule>,
 
-    font_image: ImageBuffer<Rgba<u8>, Vec<u8>>,
     glyph_height: u32,
     glyph_start_pixels: Vec<u64>,
-
-    text_images: Vec<Subbuffer<[RgbaPixel]>>,
 }
 
 impl TextRenderer {
-    pub fn add_text(&mut self, render_context: &RendererContext, input_str: &str) -> Result<&TextObject, RendererError> {
-        let mut caret = point(0.0, 0.0) + point(0.0, font.ascent());
+    pub fn add_text(
+        &mut self,
+        render_context: &RendererContext,
+        input_str: &str,
+    ) -> Result<TextObject, RendererError> {
+        /*let mut caret = point(0.0, 0.0) + point(0.0, font.ascent());
         let mut last_glyph: Option<Glyph> = None;
         let glyphs = input_str.chars().into_iter()
             .map(|num_glyph_char| -> _ {
@@ -129,7 +128,7 @@ impl TextRenderer {
                 self.font_image_buffer.slice(self.glyph_start_pixels[0]..self.glyph_start_pixels[0])
             } else {
                 let font_index = f as u8 - b'!';
-                
+
                 self.font_image_buffer.slice(self.glyph_start_pixels[font_index as usize]..self.glyph_start_pixels[(font_index+1) as usize])
             }
         };
@@ -184,8 +183,14 @@ impl TextRenderer {
                 scale: [1.0, 1.0, 1.0],
                 texture_index: 0,
             },
-        });
-        Ok(self.text_objects.last().unwrap())
+        });*/
+        Ok(TextObject {
+            verts: vec![TextQuadVert {
+                v_position: [0.0, 0.0],
+                v_color: [255, 255, 255, 255],
+                v_uv: [0.0, 0.0],
+            }],
+        })
     }
 
     fn create_text_pipeline(
@@ -194,10 +199,10 @@ impl TextRenderer {
         fs: &Arc<ShaderModule>,
     ) -> Arc<GraphicsPipeline> {
         GraphicsPipeline::start()
-            .vertex_input_state(TextQuadVert::per_instance())
+            .vertex_input_state(TextQuadVert::per_vertex())
             .vertex_shader(vs.entry_point("main").unwrap(), ())
             .input_assembly_state(
-                InputAssemblyState::new().topology(PrimitiveTopology::TriangleStrip),
+                InputAssemblyState::new().topology(PrimitiveTopology::TriangleList),
             )
             .viewport_state(ViewportState::viewport_fixed_scissor_irrelevant([
                 render_context.get_viewport().clone(),
@@ -208,6 +213,7 @@ impl TextRenderer {
                 ..Default::default()
             })
             .render_pass(Subpass::from(render_context.get_render_pass().clone(), 0).unwrap())
+            .color_blend_state(ColorBlendState::default().blend_alpha())
             .build(render_context.get_device().clone())
             .unwrap()
     }
@@ -216,8 +222,8 @@ impl TextRenderer {
         render_context: &RendererContext,
         pipeline: &Arc<GraphicsPipeline>,
         vert_buffer: &Subbuffer<[TextQuadVert]>,
-        index_buffer: &Subbuffer<[u16]>,
-        instance_count: u32,
+        mvp_desc_set: &Arc<PersistentDescriptorSet>,
+        text_font_set: &Arc<PersistentDescriptorSet>,
     ) -> Vec<Arc<PrimaryAutoCommandBuffer>> {
         render_context
             .get_framebuffers()
@@ -233,7 +239,8 @@ impl TextRenderer {
                 builder
                     .begin_render_pass(
                         RenderPassBeginInfo {
-                            clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())],
+                            //clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())],
+                            clear_values: vec![None],
                             ..RenderPassBeginInfo::framebuffer(fb.clone())
                         },
                         vulkano::command_buffer::SubpassContents::Inline,
@@ -241,15 +248,15 @@ impl TextRenderer {
                     .unwrap();
 
                 builder
+                    .bind_descriptor_sets(
+                        vulkano::pipeline::PipelineBindPoint::Graphics,
+                        pipeline.layout().clone(),
+                        0,
+                        (mvp_desc_set.clone(), text_font_set.clone()),
+                    )
                     .bind_pipeline_graphics(pipeline.clone())
                     .bind_vertex_buffers(0, vert_buffer.clone())
-                    .bind_index_buffer(index_buffer.clone())
-                    .draw(
-                        u32::try_from(vert_buffer.len()).unwrap(),
-                        instance_count,
-                        0,
-                        0,
-                    )
+                    .draw(u32::try_from(vert_buffer.len()).unwrap(), 1, 0, 0)
                     .unwrap()
                     .end_render_pass()
                     .unwrap();
@@ -262,16 +269,43 @@ impl TextRenderer {
 
 impl Renderer for TextRenderer {
     fn new(render_context: &RendererContext) -> Self {
-        let text_verts = [TextQuadVert {
-            position: [0.0, 0.0],
-            color: [0, 0, 0, 0],
-            uv: [0, 0],
-        }; 6];
+        let text_verts = vec![
+            TextQuadVert {
+                v_position: [-0.5, -0.5],
+                v_color: [255, 0, 0, 255],
+                v_uv: [0.0, 0.0],
+            },
+            TextQuadVert {
+                v_position: [-0.5, 0.5],
+                v_color: [255, 255, 255, 255],
+                v_uv: [0.0, 1.0],
+            },
+            TextQuadVert {
+                v_position: [0.5, -0.5],
+                v_color: [255, 255, 255, 255],
+                v_uv: [1.0, 0.0],
+            },
+            TextQuadVert {
+                v_position: [0.5, -0.5],
+                v_color: [255, 255, 255, 255],
+                v_uv: [1.0, 0.0],
+            },
+            TextQuadVert {
+                v_position: [-0.5, 0.5],
+                v_color: [255, 255, 255, 255],
+                v_uv: [0.0, 1.0],
+            },
+            TextQuadVert {
+                v_position: [0.5, 0.5],
+                v_color: [0, 0, 255, 255],
+                v_uv: [1.0, 1.0],
+            },
+        ];
 
         let text_vert_buffer = vulkano::buffer::Buffer::from_iter(
             render_context.get_mem_alloc(),
             BufferCreateInfo {
-                usage: BufferUsage::TRANSFER_SRC,
+                usage: BufferUsage::TRANSFER_SRC | BufferUsage::VERTEX_BUFFER,
                 ..Default::default()
             },
             AllocationCreateInfo {
@@ -282,38 +316,19 @@ impl Renderer for TextRenderer {
         )
         .unwrap();
 
-        let text_index_buffer = vulkano::buffer::Buffer::from_iter(
+        let text_mvp_buffer = vulkano::buffer::Buffer::from_data(
             render_context.get_mem_alloc(),
             BufferCreateInfo {
-                usage: BufferUsage::TRANSFER_SRC,
+                usage: BufferUsage::TRANSFER_SRC | BufferUsage::UNIFORM_BUFFER,
                 ..Default::default()
             },
             AllocationCreateInfo {
-                usage: vulkano::memory::allocator::MemoryUsage::Upload,
+                usage: MemoryUsage::Upload,
                 ..Default::default()
             },
-            (0u16..0u16).into_iter(),
-        )
-        .unwrap();
-
-        let text_objects = vec![TextPlane {
-            rotation: glam::Quat::IDENTITY.into(),
-            position: [0.0, 0.0, 0.0],
-            scale: [1.0, 1.0, 1.0],
-            texture_index: 0,
-        }];
-
-        let text_objects_buffer = vulkano::buffer::Buffer::from_iter(
-            render_context.get_mem_alloc(),
-            BufferCreateInfo {
-                usage: BufferUsage::TRANSFER_SRC,
-                ..Default::default()
+            UBO {
+                mvp: glam::Mat4::IDENTITY,
             },
-            AllocationCreateInfo {
-                usage: vulkano::memory::allocator::MemoryUsage::Upload,
-                ..Default::default()
-            },
-            text_objects.into_iter(),
         )
         .unwrap();
 
@@ -325,18 +340,20 @@ impl Renderer for TextRenderer {
         let text_graphics_pipeline =
             Self::create_text_pipeline(render_context, &text_vert_shader, &text_frag_shader);
 
-        let command_buffers = Self::create_text_cmd_bufs(
-            render_context,
-            &text_graphics_pipeline,
-            &text_vert_buffer,
-            &text_index_buffer,
-            1,
-        );
-
-        let font = FontRef::try_from_slice(include_bytes!(
-            "/usr/share/fonts/google-noto/NotoSansMono-Regular.ttf"
-        ))
+        let text_mvp_layout = text_graphics_pipeline
+            .layout()
+            .set_layouts()
+            .get(0)
+            .unwrap();
+        let text_mvp_set = PersistentDescriptorSet::new(
+            render_context.get_desc_set_alloc(),
+            text_mvp_layout.clone(),
+            [WriteDescriptorSet::buffer(0, text_mvp_buffer.clone())],
+        )
         .unwrap();
+
+        let font =
+            FontRef::try_from_slice(include_bytes!("../../NotoSansMono-Regular.ttf")).unwrap();
         let font = font.as_scaled(PxScale::from(45.0));
 
         let mut caret = point(0.0, 0.0) + point(0.0, font.ascent());
@@ -384,36 +401,37 @@ impl Renderer for TextRenderer {
         let mut builder = AutoCommandBufferBuilder::primary(
             render_context.get_cmd_buf_alloc(),
             render_context.get_graphics_queue().queue_family_index(),
-            CommandBufferUsage::MultipleSubmit,
+            CommandBufferUsage::OneTimeSubmit,
         )
         .unwrap();
 
-        let font_image_buffer = vulkano::buffer::Buffer::from_iter(
-            render_context.get_mem_alloc(),
-            BufferCreateInfo {
-                size: u64::try_from(font_image.len() * 4).unwrap(),
-                usage: BufferUsage::TRANSFER_SRC,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                usage: MemoryUsage::Upload,
-                ..Default::default()
-            },
-            font_image.pixels().into_iter().map(|p| RgbaPixel::from(*p)),
-        )
-        .unwrap();
+        let font_texture = {
+            let font_gpu_image = ImmutableImage::from_iter(
+                render_context.get_mem_alloc(),
+                font_image.pixels().into_iter().map(|p| RgbaPixel::from(*p)),
+                vulkano::image::ImageDimensions::Dim2d {
+                    width: font_image.width(),
+                    height: font_image.height(),
+                    array_layers: 1,
+                },
+                vulkano::image::MipmapsCount::One,
+                vulkano::format::Format::R8G8B8A8_UNORM,
+                &mut builder,
+            )
+            .unwrap();
+            ImageView::new_default(font_gpu_image).unwrap()
+        };
 
-        let font_gpu_image = ImmutableImage::from_iter(
-            render_context.get_mem_alloc(),
-            font_image.pixels().into_iter().map(|p| RgbaPixel::from(*p)),
-            vulkano::image::ImageDimensions::Dim2d {
-                width: font_image.width(),
-                height: font_image.height(),
-                array_layers: 1,
+        let font_sampler = Sampler::new(
+            render_context.get_device().clone(),
+            SamplerCreateInfo {
+                // mag_filter: Filter::Linear,
+                //min_filter: Filter::Linear,
+                //mipmap_mode: SamplerMipmapMode::Nearest,
+                //address_mode: [SamplerAddressMode::Repeat; 3],
+                //mip_lod_bias: 0.0,
+                ..Default::default()
             },
-            vulkano::image::MipmapsCount::One,
-            vulkano::format::Format::R8G8B8A8_UNORM,
-            &mut builder,
         )
         .unwrap();
 
@@ -425,21 +443,41 @@ impl Renderer for TextRenderer {
             .flush()
             .unwrap();
 
+        let text_font_layout = text_graphics_pipeline
+            .layout()
+            .set_layouts()
+            .get(1)
+            .unwrap();
+        let text_font_set = PersistentDescriptorSet::new(
+            render_context.get_desc_set_alloc(),
+            text_font_layout.clone(),
+            [WriteDescriptorSet::image_view_sampler(
+                0,
+                font_texture.clone(),
+                font_sampler.clone(),
+            )],
+        )
+        .unwrap();
+
+        let command_buffers = Self::create_text_cmd_bufs(
+            render_context,
+            &text_graphics_pipeline,
+            &text_vert_buffer,
+            &text_mvp_set,
+            &text_font_set,
+        );
+
         Self {
             graphics_queue: render_context.get_graphics_queue().clone(),
+            text_mvp_set,
+            text_font_set,
             text_vert_buffer,
-            text_index_buffer,
             text_vert_shader,
             text_frag_shader,
             text_graphics_pipeline,
             command_buffers,
-            font_image,
             glyph_height,
             glyph_start_pixels,
-            font_image_buffer,
-            font_gpu_image,
-            text_objects: Vec::<TextObject>::new(),
-            text_objects_buffer,
         }
     }
 
@@ -456,8 +494,8 @@ impl Renderer for TextRenderer {
             render_context,
             &self.text_graphics_pipeline,
             &self.text_vert_buffer,
-            &self.text_index_buffer,
-            self.text_index_buffer.len() as u32,
+            &self.text_mvp_set,
+            &self.text_font_set,
         );
     }
 

@@ -3,7 +3,7 @@ use vulkano::{buffer::BufferContents, instance::InstanceCreateInfo};
 
 use self::{
     render::RendererContext,
-    text::{TextObject, TextPlane, TextRenderer},
+    text::{TextObject, TextRenderer},
 };
 use std::sync::Arc;
 
@@ -36,7 +36,7 @@ pub enum RendererError {
 pub struct App {
     window: MainWindow,
     render_context: RendererContext,
-    text_renderer: TextRenderer,
+    //text_renderer: TextRenderer,
 }
 
 #[derive(BufferContents)]
@@ -68,7 +68,7 @@ impl App {
         let render_context = RendererContext::new(&instance, &app_window);
 
         Self {
-            text_renderer: TextRenderer::new(&render_context),
+            //text_renderer: TextRenderer::new(&render_context),
             render_context: render_context,
             window: app_window,
         }
@@ -78,9 +78,9 @@ impl App {
         self.window.run(self.render_context)
     }
 
-    pub fn add_text(&mut self, render_context: &RendererContext, input_str: &str) -> Result<&TextObject, RendererError> {
+    /*pub fn add_text(&mut self, render_context: &RendererContext, input_str: &str) -> Result<TextObject, RendererError> {
         self.text_renderer.add_text(render_context, input_str)
-    }
+    }*/
 }
 
 pub struct MainWindow {
@@ -111,6 +111,7 @@ impl MainWindow {
     }
     pub fn run(self, mut render_context: RendererContext) -> ! {
         let mut page_renderer = Page::new(&render_context);
+        let mut text_renderer = TextRenderer::new(&render_context);
         let mut window_resized = false;
         let mut recreate_swapchain = false;
 
@@ -158,6 +159,7 @@ impl MainWindow {
                     if elapsed > 1.0 {
                         last_sec = now;
                         page_renderer.update_command_buffers(&render_context);
+                        text_renderer.update_command_buffers(&render_context);
                     }
 
                     if window_resized || recreate_swapchain {
@@ -173,6 +175,7 @@ impl MainWindow {
                             render_context.update_viewport(new_dimensions);
 
                             page_renderer.update_pipeline(&render_context);
+                            text_renderer.update_pipeline(&render_context);
                         }
                     }
 
@@ -201,7 +204,8 @@ impl MainWindow {
                     };
 
                     let future = previous_future.join(acquire_future);
-                    let future = page_renderer
+                    let future = page_renderer.execute_cmd_buf(future.boxed(), image_i);
+                    let future = text_renderer
                         .execute_cmd_buf(future.boxed(), image_i)
                         .then_swapchain_present(
                             render_context.get_graphics_queue().clone(),
